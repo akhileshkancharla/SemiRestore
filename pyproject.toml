@@ -16,6 +16,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+platform = [
+  "pydantic>=2.10,<3",
+  "pydantic-settings>=2.7,<3",
+]
 evaluation = [
   "scikit-image>=0.25,<1",
 ]
@@ -35,7 +39,7 @@ semirestore = ["py.typed"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"
-testpaths = ["tests/model"]
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
