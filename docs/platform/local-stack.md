@@ -45,6 +45,25 @@ instance. The checkpoint mount, Prometheus configuration mount, and model image
 inputs are read-only. No secret or machine-specific absolute path belongs in
 Compose or the example environment file.
 
+## Dashboard usage
+
+Open the dashboard after its API status shows ready. Select or drop one PNG,
+JPEG, or single-frame TIFF. The browser validates basic type/dimensions and
+creates a temporary local preview; server validation remains authoritative.
+Choose Analyze, Restore, or Restore and analyze. A request can be cancelled, a
+recoverable failure retains the selection, and a duplicate submission is
+blocked.
+
+Successful restoration shows original and exact returned PNG views, a direct
+comparison slider, synchronized zoom/pan, dimensions, download, diagnostics,
+suitability guidance, warnings, model provenance, and returned timings. The UI
+labels display scaling and applies no sharpening or enhancement filters.
+Suitability is advisory and not a probability. Missing fields remain explicitly
+unavailable; the UI does not invent values.
+
+Replacing an image or result and unmounting the workspace revoke browser object
+URLs. Neither the dashboard nor API permanently stores uploads or restorations.
+
 ## Dashboard development
 
 The frontend requires Node.js 24 or newer. During direct development, Vite
@@ -58,9 +77,8 @@ npm run dev
 ```
 
 Run `npm run lint`, `npm run test:run`, and `npm run build` before packaging.
-The dashboard currently provides routing, operational status, readiness, and a
-typed API boundary. Image upload and the complete restoration workspace remain
-intentionally outside this foundation milestone.
+The dashboard includes the upload, analysis, restoration, comparison,
+diagnostics, readiness, cancellation, safe-error, and exact-PNG download flows.
 
 ## Health and shutdown
 

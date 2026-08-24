@@ -2,7 +2,7 @@
 
 ## Purpose and ownership
 
-The future adapter is the only translation layer between the platform-owned
+The production adapter is the only translation layer between the platform-owned
 `ModelService` protocol and the model-owned API:
 
 ```python
@@ -12,9 +12,9 @@ pipeline = SemiRestorePipeline.from_config(...)
 result = pipeline.restore_and_analyze(image)
 ```
 
-Those imports are intentionally absent from the platform branch because the
-final pipeline is not available here. This document defines the integration
-contract; it is not an implementation of the model or adapter.
+`SemiRestoreModelService` implements this integration in
+`semirestore.platform.model_adapter`. This document records the boundary it must
+continue to preserve; it does not redefine model behavior.
 
 Create exactly one adapter instance per application process. The application
 lifespan calls its factory once, `startup()` once, reuses the same instance for
@@ -23,10 +23,10 @@ pipeline or load a checkpoint in a route or per request.
 
 ## Lifecycle and checkpoint verification
 
-Before advertising readiness, `startup()` must:
+Before advertising readiness, `startup()`:
 
 1. require the model configuration and checkpoint settings expected by the
-   final pipeline;
+   pipeline;
 2. verify that each required artifact exists, is the intended regular file, and
    is compatible with the model/configuration version;
 3. compute the public checkpoint checksum from the exact bytes that will be
@@ -171,7 +171,7 @@ effective inference concurrency.
 
 ## Integration invariants
 
-The real integration must preserve all of these invariants:
+The integrated adapter must preserve all of these invariants:
 
 - one pipeline construction and verified checkpoint load per process startup;
 - no model construction or checkpoint load per request;

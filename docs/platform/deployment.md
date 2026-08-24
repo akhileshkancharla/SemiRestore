@@ -1,5 +1,45 @@
 # Deployment
 
+## Checkpoint installation
+
+The checkpoint is an external, ignored runtime dependency. From the repository
+root, verify the authoritative source against `artifacts/model/checksums.json`
+and atomically install the default runtime copy:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/model/install_local_checkpoint.py
+```
+
+When the immutable default source is unavailable, pass a separately obtained
+candidate explicitly:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/model/install_local_checkpoint.py `
+  --source C:\path\to\best.pt `
+  --destination artifacts\model\semirestore_conditioned.pt
+```
+
+The candidate must be a regular file whose size and SHA-256 match the tracked
+manifest. The installer verifies before and after copying and uses atomic
+replacement. Do not weaken validation, deserialize an unverified file, or
+commit either source or runtime checkpoint.
+
+## Local CPU startup
+
+Install `.[platform,dev]` into Python 3.11 or newer, install the checkpoint, and
+run exactly one worker:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn semirestore.api:create_app --factory `
+  --host 127.0.0.1 --port 8000 --workers 1
+```
+
+Set `SEMIRESTORE_DEVICE_PREFERENCE=cpu` for an explicit CPU-only local run.
+Check readiness and run [the smoke command](smoke-testing.md) before treating the
+service as usable. The default `auto` preference may choose CUDA when the local
+PyTorch runtime and device support it; that is not equivalent to the reviewed
+CPU container deployment.
+
 ## CPU deployment
 
 CPU is the portable deployment target. The Dockerfile uses a two-stage build,
@@ -35,8 +75,8 @@ Without the runtime checkpoint mount, expected container behavior is:
 - restoration returns `model_unavailable`.
 
 After starting the container on a capable machine, exercise those endpoints and
-inspect startup/shutdown logs. A successful image build alone is not a service
-smoke test.
+inspect startup/shutdown logs, then run the documented smoke command against the
+published port. A successful image build alone is not a service smoke test.
 
 ## Container health check
 
@@ -101,3 +141,14 @@ concurrency limit validated against the actual model remain the safe default.
   currently be guaranteed.
 - Platform diagnostics do not claim model scientific correctness.
 - Restored output is an estimate and is not guaranteed ground truth.
+- Suitability recommendations are advisory heuristics, not probabilities or a
+  guarantee that an input is appropriate for a scientific decision.
+
+## Release and rollback gates
+
+Before routing traffic, require a reviewed immutable image, read-only verified
+checkpoint mount, one worker, readiness success, smoke success, metrics scrape,
+and privacy-safe log review. The complete procedure is in
+[runbook.md](runbook.md). Roll back by removing the failing revision from
+traffic and deploying the last reviewed image with its compatible configuration
+and checkpoint; never change trusted metadata merely to make rollback start.

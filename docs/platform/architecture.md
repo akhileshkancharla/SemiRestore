@@ -2,16 +2,16 @@
 
 ## Architecture
 
-SemiRestore is split into a transport/platform layer and a future model layer:
+SemiRestore is split into a transport/platform layer and a model layer:
 
 - `semirestore.platform` owns typed runtime settings, safe health metadata, the
   `ModelService` protocol, its exception taxonomy, and `RestorationResult`.
 - `semirestore.api` owns application construction, lifespan state, dependency
   injection, upload validation, HTTP serialization, error handling, request
   correlation, logs, metrics, and inference admission control.
-- The future model adapter will own the translation to and from
-  `SemiRestorePipeline`. It must satisfy the existing protocol without moving
-  model behavior into the API.
+- `SemiRestoreModelService` is the translation layer to and from
+  `SemiRestorePipeline`. It satisfies the platform protocol while leaving model
+  behavior, preprocessing, restoration, and diagnostics in model-owned code.
 
 Each application object has an isolated `ApplicationRuntime`. That runtime owns
 one settings object, one Prometheus registry, and—only while the lifespan is
@@ -25,16 +25,46 @@ service.
 lifespan startup it:
 
 1. constructs one `InferenceGate` from the validated settings;
-2. calls the explicitly supplied model-service factory at most once;
+2. calls the production model-service factory (or an explicitly supplied
+   test factory) at most once;
 3. calls `startup()` once on the returned service;
 4. publishes that same successfully started instance through application state;
 5. marks startup complete, even when no adapter was configured or initialization
    failed, so operational endpoints remain available.
 
-No factory means no service. `SEMIRESTORE_ENABLE_FAKE_MODEL_SERVICE` defaults to
-false and does not activate production fake behavior. A failed service startup
-is contained, the partial service receives one best-effort `shutdown()`, and
-readiness remains false with a generic safe reason.
+The default factory constructs the real adapter. Explicit factories exist for
+tests only. `SEMIRESTORE_ENABLE_FAKE_MODEL_SERVICE` defaults to false and is
+rejected when true; it does not activate production fake behavior. A failed
+service startup is contained, the partial service receives one best-effort
+`shutdown()`, and readiness remains false with a generic safe reason.
+
+## System and data flow
+
+```text
+Browser / API client
+        |
+        v
+request ID + safe HTTP observability
+        |
+        v
+bounded multipart read -> format/decode/dimension validation
+        |
+        v
+readiness check -> process-local inference gate -> timeout boundary
+        |
+        v
+SemiRestoreModelService -> model-owned SemiRestorePipeline -> verified checkpoint
+        |
+        v
+strict result validation -> Base64 PNG + safe diagnostics/warnings
+        |
+        +--> bounded logs and Prometheus metrics (never image content)
+```
+
+The dashboard calls the same public endpoints. It previews the selected input
+through a revocable browser object URL, decodes the returned Base64 PNG into a
+separate revocable URL, and never substitutes browser filtering for model
+output. Prometheus scrapes only `/metrics`; it is not in the inference path.
 
 On lifespan shutdown the application first removes the service and gate from
 runtime state, marks the service stopped, and then calls the started service's

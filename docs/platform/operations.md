@@ -16,9 +16,9 @@ Start the existing application factory with one worker:
 .\.venv\Scripts\python -m uvicorn semirestore.api:create_app --factory --host 127.0.0.1 --port 8000 --workers 1
 ```
 
-Until the real adapter is integrated, this supported command intentionally
-starts a live-but-unready application. It does not activate a fake. Check the
-running service with:
+The command uses the production adapter. With the verified ignored checkpoint
+installed it can become ready; without it, startup remains live but unready and
+does not activate a fake. Check the running service with:
 
 ```powershell
 curl.exe -i http://127.0.0.1:8000/health/live
@@ -28,9 +28,10 @@ curl.exe -i http://127.0.0.1:8000/version
 curl.exe -i http://127.0.0.1:8000/metrics
 ```
 
-The expected readiness status is HTTP 503 and restoration returns
-`model_unavailable`. Tests supply the fake service explicitly through
-`create_app(model_service_factory=...)`; production code has no fake fallback.
+When the checkpoint is absent, the expected readiness status is HTTP 503 and
+restoration returns `model_unavailable`. Tests supply a fake service explicitly
+through `create_app(model_service_factory=...)`; production code has no fake
+fallback.
 
 ## Runtime settings
 
@@ -52,15 +53,17 @@ The expected readiness status is HTTP 503 and restoration returns
 | `SEMIRESTORE_INFERENCE_CONCURRENCY_LIMIT` | `1` | Process-local capacity |
 | `SEMIRESTORE_CONCURRENCY_ACQUISITION_TIMEOUT_SECONDS` | `1.0` | Capacity wait bound |
 | `SEMIRESTORE_INFERENCE_TIMEOUT_SECONDS` | `120.0` | Adapter call wait bound |
-| `SEMIRESTORE_MODEL_CONFIG_PATH` | unset | Opaque path for the future adapter |
-| `SEMIRESTORE_CHECKPOINT_PATH` | unset | Opaque path for the future adapter |
+| `SEMIRESTORE_MODEL_CONFIG_PATH` | unset | Optional resolved model YAML override |
+| `SEMIRESTORE_MODEL_METADATA_PATH` | unset | Optional trusted checkpoint manifest override |
+| `SEMIRESTORE_CHECKPOINT_PATH` | unset | Optional ignored runtime checkpoint override |
 | `SEMIRESTORE_DEVICE_PREFERENCE` | `auto` | `auto`, `cpu`, or `cuda` preference |
 | `SEMIRESTORE_ENABLE_FAKE_MODEL_SERVICE` | `false` | Reserved; never enables production fake behavior |
 
 Uvicorn command-line host and port must agree with the environment used by an
-operator. Settings paths are not opened or verified by the platform shell;
-verification belongs to the real adapter during startup. Do not put secrets in
-these variables or commit environment files containing secrets.
+operator. The production adapter verifies configuration and checkpoint inputs
+during startup. Do not put secrets in these variables or commit environment
+files containing secrets. The complete authoritative table, including Compose
+and dashboard settings, is [environment.md](environment.md).
 
 ## Request IDs
 
