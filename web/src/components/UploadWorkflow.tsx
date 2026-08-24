@@ -17,10 +17,13 @@ import {
 } from "../workspace/imageFile";
 import type { OperationMode, SelectedImage, WorkspaceResult } from "../workspace/types";
 import { ComparisonWorkspace } from "./ComparisonWorkspace";
+import { DiagnosticsPanel } from "./DiagnosticsPanel";
+import type { ModelHealthResponse } from "../api/types";
 
 interface UploadWorkflowProps {
   connection: ConnectionState;
   unavailableReason: string | null;
+  modelHealth?: ModelHealthResponse | null;
 }
 
 type WorkflowPhase = "idle" | "validating" | "ready" | "processing" | "success" | "cancelled";
@@ -31,7 +34,11 @@ const operationLabels: Record<OperationMode, string> = {
   "restore-and-analyze": "Restore + analyze",
 };
 
-export function UploadWorkflow({ connection, unavailableReason }: UploadWorkflowProps) {
+export function UploadWorkflow({
+  connection,
+  unavailableReason,
+  modelHealth = null,
+}: UploadWorkflowProps) {
   const [selected, setSelected] = useState<SelectedImage | null>(null);
   const [operation, setOperation] = useState<OperationMode>("restore-and-analyze");
   const [phase, setPhase] = useState<WorkflowPhase>("idle");
@@ -310,6 +317,14 @@ export function UploadWorkflow({ connection, unavailableReason }: UploadWorkflow
       </div>
       {selected && result?.kind === "restoration" ? (
         <ComparisonWorkspace original={selected} restoration={result.data} />
+      ) : null}
+      {result || error ? (
+        <DiagnosticsPanel
+          result={result}
+          connection={connection}
+          modelHealth={modelHealth}
+          failure={error}
+        />
       ) : null}
     </div>
   );

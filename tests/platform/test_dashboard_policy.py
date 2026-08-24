@@ -81,6 +81,21 @@ def test_comparison_uses_exact_png_transport_without_visual_filters() -> None:
     assert not re.search(r"(?m)^\s*filter\s*:", styles)
 
 
+def test_assurance_ui_uses_only_returned_advisory_fields() -> None:
+    assurance = (WEB / "src" / "components" / "DiagnosticsPanel.tsx").read_text(
+        encoding="utf-8"
+    )
+
+    assert "result.data.diagnostics" in assurance
+    assert "result.data.inference.phase_latency_ms" in assurance
+    assert "diagnostics.quality_indicators" in assurance
+    assert "diagnostics.spatial" in assurance
+    assert "diagnostics.tiles" in assurance
+    assert "diagnostics.clipping" in assurance
+    assert "not a probability" in assurance
+    assert "accuracy" not in assurance.casefold()
+
+
 def test_compose_keeps_dashboard_optional_and_api_only_independent() -> None:
     config: dict[str, Any] = yaml.safe_load(
         (ROOT / "compose.yaml").read_text(encoding="utf-8")

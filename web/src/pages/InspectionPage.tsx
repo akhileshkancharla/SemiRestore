@@ -2,7 +2,7 @@ import { UploadWorkflow } from "../components/UploadWorkflow";
 import { useApiStatus } from "../state/ApiStatusContext";
 
 export function InspectionPage() {
-  const { connection, ready } = useApiStatus();
+  const { connection, ready, model } = useApiStatus();
 
   return (
     <section>
@@ -19,6 +19,7 @@ export function InspectionPage() {
       <UploadWorkflow
         connection={connection}
         unavailableReason={ready?.unavailable_reason ?? null}
+        modelHealth={model}
       />
     </section>
   );
