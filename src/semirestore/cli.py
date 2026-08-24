@@ -24,8 +24,9 @@ from .checkpoints import (
 )
 from .config import ModelConfig, ModelConfigError
 from .data import DatasetValidationError
-from .model_manager import ModelManager, ModelManagerError
-from .restoration_service import RestorationServiceError, SingleImageRestorationService
+from .model_manager import ModelManagerError
+from .pipeline import PipelineConfig, SemiRestorePipeline
+from .restoration_service import RestorationServiceError
 from .trainer import (
     TrainerConfig,
     TrainingConfigurationError,
@@ -334,24 +335,26 @@ def _run_evaluate(config: WorkflowConfig, args: argparse.Namespace) -> dict[str,
     }
 
 
+def _create_pipeline(args: argparse.Namespace) -> SemiRestorePipeline:
+    return SemiRestorePipeline.from_config(
+        device=args.device,
+        pipeline_config=PipelineConfig(
+            mode=args.mode,
+            output_bit_depth=args.bit_depth,
+            tile_size=args.tile_size,
+            overlap=args.overlap,
+        ),
+    )
+
+
 def _restore_once(config: WorkflowConfig, args: argparse.Namespace) -> tuple[Any, dict[str, Any]]:
-    input_path = Path(args.input).expanduser().resolve()
-    manager = ModelManager(device=args.device)
-    manager.load()
+    del config
+    pipeline = _create_pipeline(args)
     try:
-        service = SingleImageRestorationService(manager)
-        if args.mode == "tiled":
-            result = service.restore_tiled(
-                input_path,
-                tile_size=args.tile_size,
-                overlap=args.overlap,
-                output_bit_depth=args.bit_depth,
-            )
-        else:
-            result = service.restore(input_path, output_bit_depth=args.bit_depth)
-        status = manager.status().to_dict()
+        result = pipeline.restore_and_analyze(Path(args.input), mode=args.mode)
+        status = pipeline.status().to_dict()
     finally:
-        manager.close()
+        pipeline.close()
     status["checkpoint_path"] = Path(str(status["checkpoint_path"])).name
     return result, status
 
@@ -372,8 +375,16 @@ def _run_restore(config: WorkflowConfig, args: argparse.Namespace) -> dict[str, 
 
 
 def _run_benchmark(config: WorkflowConfig, args: argparse.Namespace) -> dict[str, Any]:
-    results = [_restore_once(config, args)[0] for _ in range(args.iterations)]
-    latencies = [float(result.total_latency_ms) for result in results]
+    del config
+    pipeline = _create_pipeline(args)
+    try:
+        results = [
+            pipeline.restore_and_analyze(Path(args.input), mode=args.mode)
+            for _ in range(args.iterations)
+        ]
+    finally:
+        pipeline.close()
+    latencies = [float(result.timing_ms["total"]) for result in results]
     report = {
         "command": "benchmark",
         "status": "complete",

@@ -255,6 +255,7 @@ class FakeRestoration:
     total_latency_ms = 2.5
     resolved_device = "cpu"
     checkpoint_sha256 = "a" * 64
+    timing_ms = {"total": 2.5}
 
     def metadata(self) -> dict[str, object]:
         return {"restored_width": 12, "restored_height": 12, "warnings": []}
@@ -304,11 +305,16 @@ def test_benchmark_reports_only_measured_values(
     input_path = tmp_path / "input.png"
     input_path.write_bytes(b"fixture")
     report = tmp_path / "benchmark.json"
-    monkeypatch.setattr(
-        cli,
-        "_restore_once",
-        lambda config, args: (FakeRestoration(), {"checkpoint_sha256": "a" * 64}),
-    )
+    class FakePipeline:
+        def restore_and_analyze(self, image: Path, *, mode: str) -> FakeRestoration:
+            assert image == input_path
+            assert mode == "direct"
+            return FakeRestoration()
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(cli, "_create_pipeline", lambda args: FakePipeline())
 
     code = cli.main(
         [

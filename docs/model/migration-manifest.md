@@ -64,6 +64,13 @@ because they are newer.
 | No historical equivalent | diagnostics and assurance modules | New implementation | Deterministic intensity/structural diagnostics remain external to the pretrained network conditioner. |
 | No historical equivalent | `src/semirestore/pipeline.py` and public result contracts | New implementation | Provide the serialization-friendly `restore_and_analyze` handoff without exposing PyTorch internals. |
 
+The final pipeline implementation was completed after a read-only audit of
+`origin/work/platform-likhitha` revision
+`91d2276d206dda0c1e6dc161bb511da98cf64558`. The platform protocol and response
+types remain platform-owned and were not copied into this branch. The model
+package instead exposes a primitive `platform_projection()` mapping documented
+in `docs/model/platform-integration.md`.
+
 ## Artifact and evidence decisions
 
 | Immutable source | Planned tracked representation | Treatment | Reason |

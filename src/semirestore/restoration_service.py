@@ -395,11 +395,38 @@ class SingleImageRestorationService:
             raise ManagerNotReadyError()
         return model, status
 
+    def _prepare_input(
+        self,
+        image: ImageInput,
+        preprocessed: PreprocessingResult | None,
+    ) -> PreprocessingResult:
+        if preprocessed is None:
+            return self._preprocessor(image, limits=self._preprocessing_limits)
+        if not isinstance(preprocessed, PreprocessingResult):
+            raise ImageValidationError("Provided preprocessing result is invalid")
+        tensor = preprocessed.tensor
+        expected_shape = (
+            1,
+            1,
+            preprocessed.original_height,
+            preprocessed.original_width,
+        )
+        if (
+            tensor.layout != torch.strided
+            or tuple(tensor.shape) != expected_shape
+            or tensor.dtype != torch.float32
+            or tensor.device.type != "cpu"
+            or not bool(torch.isfinite(tensor).all().item())
+        ):
+            raise ImageValidationError("Provided preprocessing result violates the model contract")
+        return preprocessed
+
     def restore(
         self,
         image: ImageInput,
         *,
         output_bit_depth: int = 16,
+        preprocessed: PreprocessingResult | None = None,
     ) -> SingleImageRestorationResult:
         """Run one validated FP32 restoration without loading or persisting data."""
 
@@ -410,7 +437,7 @@ class SingleImageRestorationService:
 
         preprocessing_started = self._clock()
         try:
-            preprocessed = self._preprocessor(image, limits=self._preprocessing_limits)
+            preprocessed = self._prepare_input(image, preprocessed)
         except ImageResourceError:
             raise RestorationResourceLimitError() from None
         except (UnsupportedInputError, ImageDecodeError, ImageValidationError):
@@ -533,6 +560,7 @@ class SingleImageRestorationService:
         output_bit_depth: int = 16,
         max_padded_pixels_per_tile: int | None = None,
         max_tile_count: int = DEFAULT_MAX_TILE_COUNT,
+        preprocessed: PreprocessingResult | None = None,
     ) -> SingleImageRestorationResult:
         """Restore explicitly with CPU assembly and one globally conditioned tile at a time."""
 
@@ -543,7 +571,7 @@ class SingleImageRestorationService:
 
         preprocessing_started = self._clock()
         try:
-            preprocessed = self._preprocessor(image, limits=self._preprocessing_limits)
+            preprocessed = self._prepare_input(image, preprocessed)
         except ImageResourceError:
             raise RestorationResourceLimitError() from None
         except (UnsupportedInputError, ImageDecodeError, ImageValidationError):
