@@ -64,6 +64,23 @@ def test_dashboard_source_uses_typed_client_and_bounded_upload_workflow() -> Non
     assert "URL.revokeObjectURL" in upload
 
 
+def test_comparison_uses_exact_png_transport_without_visual_filters() -> None:
+    comparison = (WEB / "src" / "components" / "ComparisonWorkspace.tsx").read_text(
+        encoding="utf-8"
+    )
+    transport = (WEB / "src" / "workspace" / "restoredImage.ts").read_text(
+        encoding="utf-8"
+    )
+    styles = (WEB / "src" / "styles.css").read_text(encoding="utf-8")
+
+    assert "restoredPngBlob" in comparison
+    assert "Download lossless PNG" in comparison
+    assert 'type="range"' in comparison
+    assert "URL.revokeObjectURL" in comparison
+    assert 'type: "image/png"' in transport
+    assert not re.search(r"(?m)^\s*filter\s*:", styles)
+
+
 def test_compose_keeps_dashboard_optional_and_api_only_independent() -> None:
     config: dict[str, Any] = yaml.safe_load(
         (ROOT / "compose.yaml").read_text(encoding="utf-8")

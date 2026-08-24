@@ -16,6 +16,7 @@ import {
   SUPPORTED_IMAGE_TYPES,
 } from "../workspace/imageFile";
 import type { OperationMode, SelectedImage, WorkspaceResult } from "../workspace/types";
+import { ComparisonWorkspace } from "./ComparisonWorkspace";
 
 interface UploadWorkflowProps {
   connection: ConnectionState;
@@ -143,7 +144,8 @@ export function UploadWorkflow({ connection, unavailableReason }: UploadWorkflow
               : "No image selected.";
 
   return (
-    <div className="workflow-layout">
+    <div className="workflow-stack">
+      <div className="workflow-layout">
       <section className="panel upload-panel" aria-labelledby="upload-heading">
         <div className="panel__header">
           <div>
@@ -296,11 +298,19 @@ export function UploadWorkflow({ connection, unavailableReason }: UploadWorkflow
                   ? `Suitability: ${result.data.suitability.recommendation}.`
                   : `Lossless PNG: ${result.data.image.width} × ${result.data.image.height} px.`}
               </p>
-              <small>Scientific comparison and detailed assurance panels follow in the next milestones.</small>
+              <small>
+                {result.kind === "analysis"
+                  ? "Detailed assurance panels follow in the next milestone."
+                  : "The scientific comparison is available below; detailed assurance follows next."}
+              </small>
             </div>
           </article>
         ) : null}
       </section>
+      </div>
+      {selected && result?.kind === "restoration" ? (
+        <ComparisonWorkspace original={selected} restoration={result.data} />
+      ) : null}
     </div>
   );
 }

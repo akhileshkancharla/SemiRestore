@@ -1240,3 +1240,243 @@ h2 {
     grid-template-columns: 1fr;
   }
 }
+
+.workflow-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.comparison-workspace {
+  min-width: 0;
+  padding: 24px;
+}
+
+.comparison-header {
+  align-items: flex-start;
+}
+
+.comparison-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.button--compact {
+  min-height: 34px;
+  padding: 7px 11px;
+  font-size: 11px;
+}
+
+.button--active {
+  border-color: var(--cyan);
+  background: var(--cyan-soft);
+  color: var(--cyan);
+}
+
+.comparison-viewport {
+  position: relative;
+  display: grid;
+  height: min(62vh, 620px);
+  min-height: 340px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(45deg, rgba(103, 220, 231, 0.018) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(103, 220, 231, 0.018) 25%, transparent 25%),
+    #03090c;
+  background-position: 0 0, 10px 10px;
+  background-size: 20px 20px;
+  touch-action: none;
+  user-select: none;
+}
+
+.comparison-viewport--actual {
+  cursor: grab;
+}
+
+.comparison-viewport--actual:active {
+  cursor: grabbing;
+}
+
+.comparison-content {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  transform-origin: center;
+}
+
+.comparison-viewport--actual .comparison-content {
+  max-width: none;
+  max-height: none;
+  flex: 0 0 auto;
+}
+
+.comparison-image,
+.comparison-restored-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.comparison-image {
+  display: block;
+  object-fit: contain;
+  image-rendering: auto;
+  pointer-events: none;
+}
+
+.comparison-restored-layer {
+  overflow: hidden;
+  border-right: 1px solid var(--cyan);
+}
+
+.comparison-restored-layer .comparison-image {
+  width: 100%;
+  max-width: none;
+}
+
+.comparison-label {
+  position: absolute;
+  top: 12px;
+  z-index: 2;
+  padding: 5px 8px;
+  border: 1px solid var(--line-strong);
+  background: rgba(3, 9, 12, 0.82);
+  color: var(--ink);
+  font-size: 9px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.comparison-label--original {
+  left: 12px;
+}
+
+.comparison-label--restored {
+  right: 12px;
+  color: var(--cyan);
+}
+
+.comparison-tiff-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.comparison-slider {
+  display: grid;
+  grid-template-columns: auto minmax(160px, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.comparison-slider input {
+  width: 100%;
+  accent-color: var(--cyan);
+}
+
+.comparison-slider output {
+  color: var(--cyan);
+  font-family: "SFMono-Regular", Consolas, monospace;
+}
+
+.comparison-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 18px;
+}
+
+.comparison-dimensions {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  background: var(--line);
+}
+
+.comparison-dimensions > div {
+  padding: 12px;
+  background: var(--surface);
+}
+
+.comparison-dimensions dt {
+  margin-bottom: 6px;
+  color: var(--faint);
+  font-size: 9px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.comparison-dimensions dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.comparison-download {
+  flex: 0 0 auto;
+}
+
+.comparison-disclaimer {
+  margin: 14px 0 0;
+  color: var(--faint);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .comparison-header,
+  .comparison-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .comparison-controls {
+    justify-content: flex-start;
+  }
+
+  .comparison-dimensions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .comparison-download {
+    align-self: flex-start;
+  }
+}
+
+@media (max-width: 620px) {
+  .comparison-workspace {
+    padding: 18px;
+  }
+
+  .comparison-viewport {
+    min-height: 260px;
+  }
+
+  .comparison-slider {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  .comparison-dimensions {
+    grid-template-columns: 1fr;
+  }
+}
