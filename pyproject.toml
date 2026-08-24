@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "semirestore"
+version = "0.1.0"
+description = "Model engineering for semiconductor SEM image restoration"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=2.0,<3",
+  "Pillow>=11,<13",
+  "PyYAML>=6.0,<7",
+  "torch>=2.6,<3",
+]
+
+[project.optional-dependencies]
+evaluation = [
+  "scikit-image>=0.25,<1",
+]
+training = [
+  "scikit-image>=0.25,<1",
+]
+dev = [
+  "pytest>=8.3,<10",
+  "ruff>=0.9,<1",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+semirestore = ["py.typed"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests/model"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

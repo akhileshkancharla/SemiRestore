@@ -1,0 +1,27 @@
+# Immutable local experiment exports (read-only migration sources)
+/local/artifacts/
+
+# Runtime model artifacts and generated data
+/artifacts/model/*.pt
+/artifacts/model/*.pth
+/artifacts/model/*.ckpt
+/outputs/
+/runs/
+/uploads/
+
+# Python environments, caches, and build products
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.venv/
+.tools/
+build/
+dist/
+*.egg-info/
+
+# Local configuration and secrets
+.env
