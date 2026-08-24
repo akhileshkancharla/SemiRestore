@@ -14,7 +14,7 @@ from semirestore.api.dependencies import (
     require_model_service,
 )
 from semirestore.api.errors import RestorationFailedError
-from semirestore.api.observability import observe_inference
+from semirestore.api.observability import observe_inference, observe_restoration
 from semirestore.api.schemas import (
     InferenceResponse,
     ModelIdentityResponse,
@@ -79,8 +79,11 @@ async def restore(
         gate = require_inference_gate(runtime)
         return await gate.run(lambda: service.restore(validated_upload))
 
-    service_result = await observe_inference(request, invoke_service)
-    result = _validate_service_result(service_result, validated_upload)
+    async def execute_restoration() -> RestorationResult:
+        service_result = await observe_inference(request, invoke_service)
+        return _validate_service_result(service_result, validated_upload)
+
+    result = await observe_restoration(request, execute_restoration)
     return RestoreResponse(
         image=RestoredImageResponse(
             media_type=result.restored_media_type,

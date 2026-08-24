@@ -8,6 +8,7 @@ from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
 from semirestore.api.errors import InferenceBusyError, InferenceTimeoutError
+from semirestore.api.metrics import PlatformMetrics
 
 ResultT = TypeVar("ResultT")
 
@@ -21,6 +22,7 @@ class InferenceGate:
         concurrency_limit: int,
         acquisition_timeout_seconds: float,
         execution_timeout_seconds: float,
+        metrics: PlatformMetrics | None = None,
     ) -> None:
         if concurrency_limit < 1:
             raise ValueError("concurrency limit must be at least one")
@@ -31,11 +33,15 @@ class InferenceGate:
         self.concurrency_limit = concurrency_limit
         self.acquisition_timeout_seconds = acquisition_timeout_seconds
         self.execution_timeout_seconds = execution_timeout_seconds
+        self.metrics = metrics
         self._semaphore = asyncio.BoundedSemaphore(concurrency_limit)
 
     async def run(self, operation: Callable[[], Awaitable[ResultT]]) -> ResultT:
         """Run one operation inside the bounded inference-capacity slot."""
         acquired = False
+        active_metric_incremented = False
+        if self.metrics is not None:
+            self.metrics.inference_waiting.inc()
         try:
             try:
                 await asyncio.wait_for(
@@ -43,8 +49,16 @@ class InferenceGate:
                     timeout=self.acquisition_timeout_seconds,
                 )
             except TimeoutError as error:
+                if self.metrics is not None:
+                    self.metrics.inference_busy.inc()
                 raise InferenceBusyError() from error
+            finally:
+                if self.metrics is not None:
+                    self.metrics.inference_waiting.dec()
             acquired = True
+            if self.metrics is not None:
+                self.metrics.inference_active.inc()
+                active_metric_incremented = True
 
             task = asyncio.create_task(operation())
             try:
@@ -55,6 +69,8 @@ class InferenceGate:
                 if not done:
                     task.cancel()
                     await asyncio.gather(task, return_exceptions=True)
+                    if self.metrics is not None:
+                        self.metrics.inference_timeouts.inc()
                     raise InferenceTimeoutError()
                 return await task
             except asyncio.CancelledError:
@@ -63,4 +79,6 @@ class InferenceGate:
                 raise
         finally:
             if acquired:
+                if active_metric_incremented and self.metrics is not None:
+                    self.metrics.inference_active.dec()
                 self._semaphore.release()

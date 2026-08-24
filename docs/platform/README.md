@@ -93,3 +93,45 @@ filesystem or checkpoint paths, raw exceptions, images, tensors, or secrets.
 Cancellation continues to propagate and emits at most one deliberately named
 cancellation event; it is never reported as a successful completion or an
 `internal_error`.
+
+## Prometheus-compatible metrics
+
+`GET /metrics` exposes only the current application's isolated Prometheus
+registry using the official text exposition content type and a
+`Cache-Control: no-store` response header. It remains available without model
+readiness and is deliberately
+excluded from OpenAPI and ordinary HTTP request metrics, avoiding scrape-driven
+self-noise. Each application instance owns a fresh registry; tests and multiple
+applications therefore cannot collide or share time-series values.
+
+The registry contains these collectors:
+
+- `semirestore_http_requests_total` counter and
+  `semirestore_http_request_duration_seconds` histogram, labelled by bounded
+  method, resolved route template, and `2xx`, `3xx`, `4xx`, `5xx`, or
+  `cancelled` status class.
+- `semirestore_restoration_requests_total` counter, labelled by `success`,
+  `busy`, `timeout`, `unavailable`, `failed`, or `cancelled` outcome.
+- `semirestore_inference_duration_seconds` histogram with the same bounded
+  outcome labels. It measures platform orchestration after upload validation,
+  including capacity acquisition and the adapter call, rather than the model's
+  optional self-reported latency.
+- `semirestore_inference_active`, `semirestore_inference_waiting`, and
+  `semirestore_inference_capacity` gauges. Waiting covers capacity acquisition;
+  active begins only after acquisition, and both return to zero on every
+  terminal or cancellation path.
+- `semirestore_inference_busy_total` and
+  `semirestore_inference_timeouts_total` counters, which distinguish capacity
+  acquisition rejection from execution timeout after acquisition.
+
+HTTP duration buckets are 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5,
+5, and 10 seconds. Inference buckets are 0.01, 0.025, 0.05, 0.1, 0.25, 0.5,
+1, 2.5, 5, 10, 30, 60, and 120 seconds. Unusual methods become `OTHER`, and
+unmatched paths become `<unmatched>`.
+
+Request IDs, raw paths, query strings, filenames, client content types, image
+dimensions or content, exception messages, diagnostics, model versions,
+devices, checkpoint details, and other user-controlled values are never metric
+labels. A readiness gauge is intentionally deferred: current health is obtained
+on demand and no lifecycle hook can guarantee a continuously accurate gauge
+without risking stale or misleading readiness data.

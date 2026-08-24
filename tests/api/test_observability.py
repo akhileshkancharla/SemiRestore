@@ -16,6 +16,7 @@ from PIL import Image
 
 from semirestore.api import create_app
 from semirestore.api.errors import InferenceBusyError, InferenceTimeoutError
+from semirestore.api.metrics import PlatformMetrics
 from semirestore.api.observability import (
     LOGGER_NAME,
     RequestObservabilityMiddleware,
@@ -242,7 +243,12 @@ def test_restore_logs_one_safe_request_event_and_one_inference_event(
 
 def make_observation_request(settings: RuntimeSettings) -> Request:
     app = SimpleNamespace(
-        state=SimpleNamespace(runtime=SimpleNamespace(settings=settings)),
+        state=SimpleNamespace(
+            runtime=SimpleNamespace(
+                settings=settings,
+                metrics=PlatformMetrics(inference_capacity=1),
+            )
+        ),
     )
     route = SimpleNamespace(path="/api/v1/restore")
     return Request(
@@ -325,7 +331,11 @@ def test_request_cancellation_propagates_without_internal_or_completion_event() 
     async def cancelled_app(scope: Any, receive: Any, send: Any) -> None:
         raise asyncio.CancelledError
 
-    middleware = RequestObservabilityMiddleware(cancelled_app, environment="development")
+    middleware = RequestObservabilityMiddleware(
+        cancelled_app,
+        environment="development",
+        metrics=PlatformMetrics(inference_capacity=1),
+    )
     scope = {
         "type": "http",
         "method": "GET",

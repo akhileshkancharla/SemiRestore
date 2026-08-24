@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from semirestore import __version__
 from semirestore.api.concurrency import InferenceGate
 from semirestore.api.errors import register_exception_handlers
+from semirestore.api.metrics import PlatformMetrics
 from semirestore.api.observability import (
     RequestObservabilityMiddleware,
     configure_application_logging,
@@ -25,6 +26,7 @@ class ApplicationRuntime:
     """Mutable process-local state owned by one application instance."""
 
     settings: RuntimeSettings
+    metrics: PlatformMetrics
     model_service: ModelService | None = None
     inference_gate: InferenceGate | None = None
     startup_complete: bool = False
@@ -59,7 +61,13 @@ def create_app(
     model_service_factory: ModelServiceFactory | None = None,
 ) -> FastAPI:
     """Create an application whose supplied model service is lifespan-scoped."""
-    runtime = ApplicationRuntime(settings=settings or RuntimeSettings())
+    runtime_settings = settings or RuntimeSettings()
+    runtime = ApplicationRuntime(
+        settings=runtime_settings,
+        metrics=PlatformMetrics(
+            inference_capacity=runtime_settings.inference_concurrency_limit,
+        ),
+    )
     configure_application_logging(runtime.settings)
 
     @asynccontextmanager
@@ -71,6 +79,7 @@ def create_app(
                 runtime.settings.concurrency_acquisition_timeout_seconds
             ),
             execution_timeout_seconds=runtime.settings.inference_timeout_seconds,
+            metrics=runtime.metrics,
         )
         try:
             if model_service_factory is None:
@@ -109,11 +118,14 @@ def create_app(
     app.add_middleware(
         RequestObservabilityMiddleware,
         environment=runtime.settings.environment,
+        metrics=runtime.metrics,
     )
     register_exception_handlers(app)
+    from semirestore.api.routes.metrics import router as metrics_router
     from semirestore.api.routes.operations import router as operations_router
     from semirestore.api.routes.restoration import router as restoration_router
 
     app.include_router(operations_router)
+    app.include_router(metrics_router)
     app.include_router(restoration_router)
     return app
