@@ -64,3 +64,32 @@ adapter offloads blocking CPU or GPU work to a thread or native runtime,
 cancelling the awaiting coroutine may not physically stop that work or GPU
 kernels immediately. Capacity-release behavior must be reviewed with the real
 adapter before claiming hard inference cancellation.
+
+## Request correlation and application logs
+
+Every HTTP request receives an opaque request ID before routing. A caller may
+provide `X-Request-ID` when its value is 1–64 printable ASCII characters from
+letters, digits, `.`, `_`, `:`, and `-`, beginning with a letter or digit.
+Missing, ambiguous, or invalid values are replaced with a generated UUID. The
+validated ID is returned in the `X-Request-ID` response header and included in
+the stable API error envelope.
+
+Application events use the isolated `semirestore` logger. The
+`SEMIRESTORE_LOG_LEVEL`, `SEMIRESTORE_JSON_LOGGING`, and
+`SEMIRESTORE_ENVIRONMENT` settings control its level, format, and environment
+field. JSON is the default; human-readable output is available for local use.
+HTTP 2xx/3xx completions log at INFO, 4xx at WARNING, and 5xx at ERROR. Each
+completion records monotonic elapsed time, the resolved route template (or
+`<unmatched>`), status class, and stable error code where applicable.
+
+Inference events record the platform-observed interval around model-service
+availability checks, inference-capacity waiting, and the adapter call. This is
+not model-reported latency and can therefore be longer than the optional
+`inference.latency_ms` returned by an adapter. Logged outcomes are limited to
+success, busy, timeout, unavailable, failed, and cancellation. Request and
+inference logs never inspect or emit query strings, request or response bodies,
+multipart boundaries, filenames, headers other than the validated request ID,
+filesystem or checkpoint paths, raw exceptions, images, tensors, or secrets.
+Cancellation continues to propagate and emits at most one deliberately named
+cancellation event; it is never reported as a successful completion or an
+`internal_error`.

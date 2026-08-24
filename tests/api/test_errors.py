@@ -57,7 +57,7 @@ def test_platform_errors_map_to_stable_status_and_safe_details(
     assert response.status_code == expected_status
     assert response.json()["error"]["code"] == expected_code
     assert response.json()["error"]["details"] == {"limit": 10}
-    assert response.json()["error"]["request_id"] is None
+    assert response.json()["error"]["request_id"] == response.headers["x-request-id"]
 
 
 @pytest.mark.parametrize(
@@ -97,6 +97,7 @@ def test_model_service_errors_suppress_internal_messages(
     assert response.status_code == expected_status
     assert response.json()["error"]["code"] == expected_code
     assert response.json()["error"]["details"] is None
+    assert response.json()["error"]["request_id"] == response.headers["x-request-id"]
     assert "checkpoint.pt" not in response.text
     assert "token" not in response.text
     assert "tensor" not in response.text
@@ -134,13 +135,11 @@ def test_unexpected_error_becomes_generic_internal_error() -> None:
         response = client.get("/_test/internal-error")
 
     assert response.status_code == 500
-    assert response.json() == {
-        "error": {
-            "code": "internal_error",
-            "message": "An internal server error occurred.",
-            "details": None,
-            "request_id": None,
-        }
+    assert response.json()["error"] == {
+        "code": "internal_error",
+        "message": "An internal server error occurred.",
+        "details": None,
+        "request_id": response.headers["x-request-id"],
     }
     for unsafe_text in ("Traceback", "C:/", "checkpoint.pt", "token", "tensor"):
         assert unsafe_text not in response.text
@@ -157,22 +156,26 @@ def test_framework_http_error_uses_error_envelope() -> None:
         "code": "invalid_request",
         "message": "The requested resource was not found.",
         "details": None,
-        "request_id": None,
+        "request_id": response.headers["x-request-id"],
     }
 
 
-def test_handler_includes_existing_request_id_without_generating_one() -> None:
+def test_handler_includes_validated_client_request_id() -> None:
     app = create_app()
 
     @app.get("/_test/request-id")
     def raise_error(request: Request) -> None:
-        request.state.request_id = "existing-request-id"
+        assert request.state.request_id == "existing-request-id"
         raise InvalidRequestError()
 
     with TestClient(app) as client:
-        response = client.get("/_test/request-id")
+        response = client.get(
+            "/_test/request-id",
+            headers={"x-request-id": "existing-request-id"},
+        )
 
     assert response.json()["error"]["request_id"] == "existing-request-id"
+    assert response.headers["x-request-id"] == "existing-request-id"
 
 
 def test_existing_health_endpoint_contract_remains_compatible(

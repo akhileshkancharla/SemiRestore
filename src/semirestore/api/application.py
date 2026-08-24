@@ -11,6 +11,10 @@ from fastapi import FastAPI
 from semirestore import __version__
 from semirestore.api.concurrency import InferenceGate
 from semirestore.api.errors import register_exception_handlers
+from semirestore.api.observability import (
+    RequestObservabilityMiddleware,
+    configure_application_logging,
+)
 from semirestore.platform import ModelHealth, ModelService, ModelServiceState, RuntimeSettings
 
 ModelServiceFactory = Callable[[RuntimeSettings], ModelService]
@@ -56,6 +60,7 @@ def create_app(
 ) -> FastAPI:
     """Create an application whose supplied model service is lifespan-scoped."""
     runtime = ApplicationRuntime(settings=settings or RuntimeSettings())
+    configure_application_logging(runtime.settings)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -101,6 +106,10 @@ def create_app(
 
     app = FastAPI(title="SemiRestore", version=__version__, lifespan=lifespan)
     app.state.runtime = runtime
+    app.add_middleware(
+        RequestObservabilityMiddleware,
+        environment=runtime.settings.environment,
+    )
     register_exception_handlers(app)
     from semirestore.api.routes.operations import router as operations_router
     from semirestore.api.routes.restoration import router as restoration_router

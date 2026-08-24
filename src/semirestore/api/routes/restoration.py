@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Request, UploadFile
 
 from semirestore.api.application import ApplicationRuntime
 from semirestore.api.dependencies import (
@@ -14,6 +14,7 @@ from semirestore.api.dependencies import (
     require_model_service,
 )
 from semirestore.api.errors import RestorationFailedError
+from semirestore.api.observability import observe_inference
 from semirestore.api.schemas import (
     InferenceResponse,
     ModelIdentityResponse,
@@ -64,17 +65,21 @@ def _validate_service_result(
 
 @router.post("/restore", response_model=RestoreResponse)
 async def restore(
+    request: Request,
     runtime: RuntimeDependency,
     image: ImageUpload = None,
 ) -> RestoreResponse:
     """Validate one upload and restore it with the lifespan-owned service."""
     validated_upload = await validate_upload(image, runtime.settings)
-    service = require_model_service(runtime)
-    if not runtime.model_health().ready:
-        raise ModelServiceUnavailableError("model service is unavailable")
 
-    gate = require_inference_gate(runtime)
-    service_result = await gate.run(lambda: service.restore(validated_upload))
+    async def invoke_service() -> object:
+        service = require_model_service(runtime)
+        if not runtime.model_health().ready:
+            raise ModelServiceUnavailableError("model service is unavailable")
+        gate = require_inference_gate(runtime)
+        return await gate.run(lambda: service.restore(validated_upload))
+
+    service_result = await observe_inference(request, invoke_service)
     result = _validate_service_result(service_result, validated_upload)
     return RestoreResponse(
         image=RestoredImageResponse(

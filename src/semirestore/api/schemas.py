@@ -67,7 +67,7 @@ class ErrorBody(ResponseModel):
     code: ErrorCode
     message: str = Field(min_length=1, max_length=256)
     details: dict[str, JsonValue] | None = None
-    request_id: str | None = Field(default=None, min_length=1, max_length=128)
+    request_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class ErrorResponse(ResponseModel):

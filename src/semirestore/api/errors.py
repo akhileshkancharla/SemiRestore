@@ -86,9 +86,9 @@ class RestorationFailedError(APIError):
 
 
 def _request_id(request: Request) -> str | None:
-    """Read a future request ID without generating or trusting client input."""
+    """Read the request ID already validated by observability middleware."""
     request_id = getattr(request.state, "request_id", None)
-    if isinstance(request_id, str) and 1 <= len(request_id) <= 128:
+    if isinstance(request_id, str) and 1 <= len(request_id) <= 64:
         return request_id
     return None
 
@@ -101,6 +101,7 @@ def _error_response(
     message: str,
     details: dict[str, JsonValue] | None = None,
 ) -> JSONResponse:
+    request.state.error_code = code.value
     envelope = ErrorResponse(
         error=ErrorBody(
             code=code,
