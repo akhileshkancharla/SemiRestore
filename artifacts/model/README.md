@@ -73,3 +73,24 @@ explicitly supplied. Failed partial copies are removed.
 
 Installation only copies verified opaque bytes. It does not deserialize or
 otherwise inspect the PyTorch checkpoint.
+
+## Safe model loading
+
+After verified installation, load the frozen model with:
+
+```python
+from semirestore.checkpoints import load_conditioned_checkpoint
+
+loaded = load_conditioned_checkpoint(device="auto")
+model = loaded.model
+```
+
+The loader re-verifies the runtime file before every deserialization, constructs
+the architecture from `configs/model/resolved_conditioned.yaml`, and calls
+`torch.load(..., weights_only=True)` without an unsafe fallback. Weights must
+strictly match the frozen 9,111,684-parameter model. The returned model is in
+evaluation mode with gradients disabled, and the result records its resolved
+device, checkpoint digest, model identity, version, and training revision.
+
+Supported device requests are `cpu`, `cuda`, `cuda:N`, and `auto`. `auto` uses
+the first CUDA device when available and otherwise resolves to CPU.
