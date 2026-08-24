@@ -170,7 +170,16 @@ def test_file_reuse_detects_split_leakage(tmp_path: Path) -> None:
         read_pair_manifest(manifest, tmp_path, split="train")
 
 
-@pytest.mark.parametrize("unsafe", ("../escape.npy", "..\\escape.npy"))
+@pytest.mark.parametrize(
+    "unsafe",
+    (
+        "../escape.npy",
+        "..\\escape.npy",
+        "nested/../../escape.npy",
+        "nested\\..\\..\\escape.npy",
+        "nested/..\\../escape.npy",
+    ),
+)
 def test_path_traversal_is_rejected(tmp_path: Path, unsafe: str) -> None:
     outside = tmp_path.parent / "escape.npy"
     np.save(outside, np.zeros((2, 2), dtype=np.float32))
@@ -178,6 +187,73 @@ def test_path_traversal_is_rejected(tmp_path: Path, unsafe: str) -> None:
     manifest = _write_manifest(
         tmp_path,
         [{"sample_id": "unsafe", "lr_path": unsafe, "hr_path": high, "split": "train"}],
+    )
+
+    with pytest.raises(DatasetValidationError, match="escapes the dataset root"):
+        read_pair_manifest(manifest, tmp_path, split="train")
+
+
+@pytest.mark.parametrize(
+    "unsafe",
+    (
+        "/var/data/escape.npy",
+        "C:/data/escape.npy",
+        "C:\\data\\escape.npy",
+        "C:escape.npy",
+        "//server/share/escape.npy",
+        "\\\\server\\share\\escape.npy",
+    ),
+)
+def test_cross_platform_absolute_paths_are_rejected(tmp_path: Path, unsafe: str) -> None:
+    _, high = _save_pair(tmp_path, "safe")
+    manifest = _write_manifest(
+        tmp_path,
+        [{"sample_id": "unsafe", "lr_path": unsafe, "hr_path": high, "split": "train"}],
+    )
+
+    with pytest.raises(DatasetValidationError, match="must be relative"):
+        read_pair_manifest(manifest, tmp_path, split="train")
+
+
+def test_backslash_and_mixed_separators_support_nested_relative_paths(tmp_path: Path) -> None:
+    low, high = _save_pair(tmp_path, "nested/sample")
+    manifest = _write_manifest(
+        tmp_path,
+        [
+            {
+                "sample_id": "nested",
+                "lr_path": low.replace("/", "\\"),
+                "hr_path": high.replace("hr/", "hr\\"),
+                "split": "train",
+            }
+        ],
+    )
+
+    records = read_pair_manifest(manifest, tmp_path, split="train")
+
+    assert records[0].low_resolution_path == (tmp_path / low).resolve()
+    assert records[0].high_resolution_path == (tmp_path / high).resolve()
+
+
+def test_symlink_escape_is_rejected(tmp_path: Path) -> None:
+    outside = tmp_path.parent / f"{tmp_path.name}-outside.npy"
+    np.save(outside, np.zeros((2, 2), dtype=np.float32))
+    link = tmp_path / "linked.npy"
+    try:
+        link.symlink_to(outside)
+    except OSError as error:
+        pytest.skip(f"File symlinks are unavailable: {error}")
+    _, high = _save_pair(tmp_path, "safe")
+    manifest = _write_manifest(
+        tmp_path,
+        [
+            {
+                "sample_id": "unsafe",
+                "lr_path": link.name,
+                "hr_path": high,
+                "split": "train",
+            }
+        ],
     )
 
     with pytest.raises(DatasetValidationError, match="escapes the dataset root"):
