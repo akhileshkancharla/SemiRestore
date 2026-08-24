@@ -19,6 +19,7 @@ def test_settings_have_safe_development_defaults() -> None:
     assert settings.inference_concurrency_limit == 1
     assert settings.enable_fake_model_service is False
     assert settings.model_config_path is None
+    assert settings.model_metadata_path is None
     assert settings.checkpoint_path is None
 
 
@@ -30,6 +31,7 @@ def test_settings_load_typed_environment_overrides(monkeypatch: pytest.MonkeyPat
     monkeypatch.setenv("SEMIRESTORE_ALLOWED_MEDIA_TYPES", '["IMAGE/PNG", "image/tiff"]')
     monkeypatch.setenv("SEMIRESTORE_INFERENCE_CONCURRENCY_LIMIT", "2")
     monkeypatch.setenv("SEMIRESTORE_MODEL_CONFIG_PATH", "configs/runtime.yaml")
+    monkeypatch.setenv("SEMIRESTORE_MODEL_METADATA_PATH", "artifacts/model/checksums.json")
     monkeypatch.setenv("SEMIRESTORE_CHECKPOINT_PATH", "artifacts/model/model.pt")
     monkeypatch.setenv("SEMIRESTORE_DEVICE_PREFERENCE", "cpu")
     monkeypatch.setenv("SEMIRESTORE_ENABLE_FAKE_MODEL_SERVICE", "true")
@@ -43,6 +45,7 @@ def test_settings_load_typed_environment_overrides(monkeypatch: pytest.MonkeyPat
     assert settings.allowed_media_types == ("image/png", "image/tiff")
     assert settings.inference_concurrency_limit == 2
     assert settings.model_config_path == Path("configs/runtime.yaml")
+    assert settings.model_metadata_path == Path("artifacts/model/checksums.json")
     assert settings.checkpoint_path == Path("artifacts/model/model.pt")
     assert settings.device_preference == "cpu"
     assert settings.enable_fake_model_service is True

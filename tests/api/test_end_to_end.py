@@ -79,13 +79,13 @@ def test_unconfigured_production_application_is_live_safe_and_unready(
     assert ready.json() == {
         "ready": False,
         "state": "unavailable",
-        "unavailable_reason": "model service adapter is not configured",
+        "unavailable_reason": "model service failed to initialize",
     }
     assert model.status_code == 200
     assert model.json() == {
         "ready": False,
         "state": "unavailable",
-        "unavailable_reason": "model service adapter is not configured",
+        "unavailable_reason": "model service failed to initialize",
         "device": None,
         "model_version": None,
         "checkpoint_checksum": None,
@@ -118,6 +118,7 @@ def test_unconfigured_production_application_is_live_safe_and_unready(
         settings=RuntimeSettings(
             environment="production",
             enable_fake_model_service=True,
+            checkpoint_path=tmp_path / "still-missing.pt",
         )
     )
     with TestClient(fake_flag_app) as client:

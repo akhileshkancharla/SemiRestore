@@ -17,6 +17,7 @@ from semirestore.api.observability import (
     configure_application_logging,
 )
 from semirestore.platform import ModelHealth, ModelService, ModelServiceState, RuntimeSettings
+from semirestore.platform.model_adapter import create_model_service
 
 ModelServiceFactory = Callable[[RuntimeSettings], ModelService]
 
@@ -62,6 +63,9 @@ def create_app(
 ) -> FastAPI:
     """Create an application whose supplied model service is lifespan-scoped."""
     runtime_settings = settings or RuntimeSettings()
+    service_factory = (
+        create_model_service if model_service_factory is None else model_service_factory
+    )
     runtime = ApplicationRuntime(
         settings=runtime_settings,
         metrics=PlatformMetrics(
@@ -82,13 +86,10 @@ def create_app(
             metrics=runtime.metrics,
         )
         try:
-            if model_service_factory is None:
-                runtime.unavailable_reason = "model service adapter is not configured"
-            else:
-                service = model_service_factory(runtime.settings)
-                await service.startup()
-                runtime.model_service = service
-                runtime.unavailable_reason = ""
+            service = service_factory(runtime.settings)
+            await service.startup()
+            runtime.model_service = service
+            runtime.unavailable_reason = ""
         except Exception:
             runtime.unavailable_reason = "model service failed to initialize"
             if service is not None:

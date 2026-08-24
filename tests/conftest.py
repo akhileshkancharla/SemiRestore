@@ -16,6 +16,7 @@ from PIL import Image
 
 from semirestore.api.uploads import ValidatedUpload
 from semirestore.platform import (
+    AnalysisResult,
     ModelHealth,
     ModelServiceState,
     ModelServiceUnavailableError,
@@ -128,6 +129,20 @@ class FakeModelService:
             raise
         finally:
             self.active_restorations -= 1
+
+    async def analyze(self, upload: ValidatedUpload) -> AnalysisResult:
+        return AnalysisResult(
+            original_width=upload.width,
+            original_height=upload.height,
+            diagnostics={"synthetic": True, "source_format": upload.detected_format},
+            suitability_recommendation="restore",
+            suitability_reasons=("Synthetic test recommendation.",),
+            warnings=("Synthetic test analysis; no real diagnostics were performed.",),
+            analysis_latency_ms=1.0,
+        )
+
+    async def restore_and_analyze(self, upload: ValidatedUpload) -> RestorationResult:
+        return await self.restore(upload)
 
 
 @pytest.fixture

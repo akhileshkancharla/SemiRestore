@@ -170,8 +170,8 @@ def test_excessive_decoded_dimensions_are_rejected(fake_model_service: Any) -> N
     assert fake_model_service.restoration_calls == 0
 
 
-def test_unconfigured_application_has_no_fake_fallback() -> None:
-    app = create_app()
+def test_missing_checkpoint_application_has_no_fake_fallback(tmp_path: Path) -> None:
+    app = create_app(settings=RuntimeSettings(checkpoint_path=tmp_path / "missing.pt"))
 
     with TestClient(app) as client:
         response = client.post(

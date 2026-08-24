@@ -40,7 +40,7 @@ def test_lifespan_initializes_reuses_and_shuts_down_supplied_service(
     assert fake_model_service.shutdown_calls == 1
 
 
-def test_lifespan_without_factory_stays_explicitly_unconfigured() -> None:
+def test_default_factory_fails_closed_when_checkpoint_is_missing() -> None:
     app = create_app()
 
     with TestClient(app):
@@ -48,7 +48,7 @@ def test_lifespan_without_factory_stays_explicitly_unconfigured() -> None:
 
         assert health.state is ModelServiceState.UNAVAILABLE
         assert health.ready is False
-        assert health.unavailable_reason == "model service adapter is not configured"
+        assert health.unavailable_reason == "model service failed to initialize"
 
 
 def test_startup_failure_is_contained_and_partial_service_is_closed(

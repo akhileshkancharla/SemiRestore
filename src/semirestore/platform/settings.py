@@ -43,6 +43,7 @@ class RuntimeSettings(BaseSettings):
     inference_timeout_seconds: float = Field(default=120.0, gt=0)
 
     model_config_path: Path | None = None
+    model_metadata_path: Path | None = None
     checkpoint_path: Path | None = None
     device_preference: Literal["auto", "cpu", "cuda"] = "auto"
     enable_fake_model_service: bool = False

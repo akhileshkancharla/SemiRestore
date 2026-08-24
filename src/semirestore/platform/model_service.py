@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
 from pydantic import JsonValue
 
@@ -141,6 +141,58 @@ class RestorationResult:
                 raise ValueError("warnings must contain only safe public text")
 
 
+@dataclass(frozen=True, slots=True)
+class AnalysisResult:
+    """Serializable model diagnostic result without image or tensor objects."""
+
+    original_width: int
+    original_height: int
+    diagnostics: Mapping[str, JsonValue]
+    suitability_recommendation: Literal["restore", "warn", "bypass"]
+    suitability_reasons: tuple[str, ...]
+    warnings: tuple[str, ...]
+    analysis_latency_ms: float
+
+    def __post_init__(self) -> None:
+        for field_name in ("original_width", "original_height"):
+            value = getattr(self, field_name)
+            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+                raise ValueError(f"{field_name} must be a positive integer")
+        if (
+            not isinstance(self.analysis_latency_ms, (int, float))
+            or isinstance(self.analysis_latency_ms, bool)
+            or not math.isfinite(self.analysis_latency_ms)
+            or self.analysis_latency_ms < 0
+        ):
+            raise ValueError("analysis latency must be finite and non-negative")
+        object.__setattr__(self, "analysis_latency_ms", float(self.analysis_latency_ms))
+        try:
+            serialized = json.dumps(dict(self.diagnostics), allow_nan=False, separators=(",", ":"))
+            decoded = json.loads(serialized)
+        except (TypeError, ValueError) as error:
+            raise ValueError("diagnostics must contain only JSON-compatible values") from error
+        if len(serialized.encode("utf-8")) > _MAX_DIAGNOSTICS_BYTES:
+            raise ValueError("diagnostics exceed the platform result limit")
+        object.__setattr__(self, "diagnostics", MappingProxyType(decoded))
+        for values, field_name in (
+            (self.suitability_reasons, "suitability reasons"),
+            (self.warnings, "warnings"),
+        ):
+            if not isinstance(values, tuple):
+                raise ValueError(f"{field_name} must be an immutable tuple")
+            for value in values:
+                if (
+                    not isinstance(value, str)
+                    or not value
+                    or value != value.strip()
+                    or len(value) > _MAX_WARNING_LENGTH
+                    or not value.isprintable()
+                    or "/" in value
+                    or "\\" in value
+                ):
+                    raise ValueError(f"{field_name} must contain only safe public text")
+
+
 @runtime_checkable
 class ModelService(Protocol):
     """Lifecycle, health, and restoration surface required by the API platform."""
@@ -154,8 +206,14 @@ class ModelService(Protocol):
     def health(self) -> ModelHealth:
         """Return current safe readiness and model metadata."""
 
+    async def analyze(self, upload: ValidatedUpload) -> AnalysisResult:
+        """Analyze one transport-validated image with model-owned diagnostics."""
+
     async def restore(self, upload: ValidatedUpload) -> RestorationResult:
         """Restore one transport-validated image using long-lived resources."""
+
+    async def restore_and_analyze(self, upload: ValidatedUpload) -> RestorationResult:
+        """Restore and diagnose one image using the retained pipeline."""
 
 
 class ModelServiceError(RuntimeError):

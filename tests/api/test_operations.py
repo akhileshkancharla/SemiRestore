@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from fastapi.testclient import TestClient
 
 from semirestore import __version__
 from semirestore.api import create_app
-from semirestore.platform import ModelHealth, ModelServiceState
+from semirestore.platform import ModelHealth, ModelServiceState, RuntimeSettings
 
 
 def test_ready_service_exposes_operational_health_and_version(
@@ -112,8 +113,8 @@ def test_liveness_does_not_call_model_health(fake_model_service: Any) -> None:
     assert response.json() == {"status": "alive"}
 
 
-def test_unconfigured_application_is_live_but_not_ready() -> None:
-    app = create_app()
+def test_missing_checkpoint_application_is_live_but_not_ready(tmp_path: Path) -> None:
+    app = create_app(settings=RuntimeSettings(checkpoint_path=tmp_path / "missing.pt"))
 
     with TestClient(app) as client:
         live = client.get("/health/live")
@@ -121,4 +122,4 @@ def test_unconfigured_application_is_live_but_not_ready() -> None:
 
     assert live.status_code == 200
     assert ready.status_code == 503
-    assert ready.json()["unavailable_reason"] == "model service adapter is not configured"
+    assert ready.json()["unavailable_reason"] == "model service failed to initialize"
