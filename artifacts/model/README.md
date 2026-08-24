@@ -46,3 +46,30 @@ not source code; keeping it external avoids repository bloat and prevents an
 unreviewed serialized object from being distributed through normal source
 history. The checksum manifest provides a stable identity without claiming the
 checkpoint was trained in this repository.
+
+## Verified local installation
+
+From the repository root, verify and install the authoritative source at the
+default ignored runtime destination with:
+
+```console
+python scripts/model/install_local_checkpoint.py
+```
+
+Alternative paths may be supplied explicitly:
+
+```console
+python scripts/model/install_local_checkpoint.py \
+  --source path/to/best.pt \
+  --destination artifacts/model/semirestore_conditioned.pt
+```
+
+The installer loads the trusted size, digest, and default paths from
+`checksums.json`. It verifies the source, copies through a temporary `.partial`
+file in the destination directory, verifies that copy, and only then replaces
+the destination atomically. A correctly installed destination is an idempotent
+success. A different regular-file destination is preserved unless `--force` is
+explicitly supplied. Failed partial copies are removed.
+
+Installation only copies verified opaque bytes. It does not deserialize or
+otherwise inspect the PyTorch checkpoint.
