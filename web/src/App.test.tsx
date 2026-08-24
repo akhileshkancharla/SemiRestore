@@ -86,13 +86,15 @@ describe("dashboard foundation", () => {
     expect(screen.getByText("Live")).toBeVisible();
   });
 
-  it("keeps the full restoration workspace outside the foundation route", async () => {
+  it("routes to the restoration upload workflow", async () => {
     installApi();
     renderApp("/inspect");
 
-    expect(await screen.findByRole("heading", { name: "Workspace foundation" })).toBeVisible();
-    expect(screen.getByText(/intentionally begin in Milestone 19/i)).toBeVisible();
-    expect(screen.queryByRole("button", { name: /restore/i })).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "SEM restoration workspace" }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Browse files" })).toBeEnabled();
+    expect(screen.getByRole("radio", { name: /Restore \+ analyze/i })).toBeChecked();
   });
 
   it("surfaces a safe offline state", async () => {

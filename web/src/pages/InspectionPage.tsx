@@ -1,22 +1,25 @@
+import { UploadWorkflow } from "../components/UploadWorkflow";
+import { useApiStatus } from "../state/ApiStatusContext";
+
 export function InspectionPage() {
+  const { connection, ready } = useApiStatus();
+
   return (
     <section>
       <div className="page-heading">
         <div>
           <p className="eyebrow">Inspection workspace</p>
-          <h1>Workspace foundation</h1>
+          <h1>SEM restoration workspace</h1>
           <p className="page-heading__description">
-            Routing and service connectivity are ready. Image upload, analysis controls, restored
-            comparison, and result export intentionally begin in Milestone 19.
+            Validate one local capture, choose the scientific operation, and submit it through the
+            production model-service boundary. Images are not permanently stored by the dashboard.
           </p>
         </div>
       </div>
-      <div className="panel placeholder-stage">
-        <div className="placeholder-stage__grid" aria-hidden="true" />
-        <span className="placeholder-stage__tag">FOUNDATION / NO USER DATA</span>
-        <h2>Restoration workspace reserved</h2>
-        <p>No image is selected, transmitted, cached, or persisted by this dashboard foundation.</p>
-      </div>
+      <UploadWorkflow
+        connection={connection}
+        unavailableReason={ready?.unavailable_reason ?? null}
+      />
     </section>
   );
 }

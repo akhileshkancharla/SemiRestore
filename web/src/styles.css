@@ -939,3 +939,304 @@ h2 {
     transition-duration: 0.01ms !important;
   }
 }
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.workflow-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.upload-panel,
+.operation-panel {
+  padding: 24px;
+}
+
+.drop-zone {
+  display: flex;
+  min-height: 248px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 30px;
+  border: 1px dashed rgba(103, 220, 231, 0.38);
+  background:
+    linear-gradient(rgba(103, 220, 231, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(103, 220, 231, 0.025) 1px, transparent 1px),
+    rgba(4, 13, 17, 0.48);
+  background-size: 20px 20px;
+  text-align: center;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.drop-zone:hover {
+  border-color: var(--cyan);
+  background-color: rgba(103, 220, 231, 0.04);
+}
+
+.drop-zone--disabled {
+  pointer-events: none;
+  opacity: 0.58;
+}
+
+.drop-zone__glyph {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  color: var(--cyan);
+  font-size: 26px;
+  font-weight: 300;
+}
+
+.drop-zone > strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.drop-zone > span {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.selected-image {
+  display: grid;
+  grid-template-columns: 164px minmax(0, 1fr);
+  gap: 18px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.selected-image__preview {
+  display: grid;
+  min-height: 132px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #03090c;
+}
+
+.selected-image__preview img {
+  display: block;
+  width: 100%;
+  height: 132px;
+  object-fit: contain;
+  image-rendering: auto;
+}
+
+.selected-image__preview-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+}
+
+.selected-image__preview-fallback span {
+  color: var(--cyan);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  letter-spacing: 0.16em;
+}
+
+.selected-image dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.selected-image dl > div {
+  min-width: 0;
+}
+
+.selected-image dt {
+  margin-bottom: 5px;
+  color: var(--faint);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.selected-image dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.operation-options {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.mode-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: rgba(3, 10, 13, 0.38);
+  cursor: pointer;
+}
+
+.mode-card--active {
+  border-color: rgba(103, 220, 231, 0.52);
+  background: var(--cyan-soft);
+}
+
+.mode-card input {
+  margin-top: 3px;
+  accent-color: var(--cyan);
+}
+
+.mode-card span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mode-card strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.mode-card small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.workflow-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-left: 2px solid var(--amber);
+  background: rgba(240, 189, 104, 0.07);
+}
+
+.workflow-notice--validation,
+.workflow-notice--server,
+.workflow-notice--timeout {
+  border-left-color: var(--red);
+  background: rgba(240, 138, 128, 0.07);
+}
+
+.workflow-notice--backpressure {
+  border-left-color: var(--amber);
+}
+
+.workflow-notice strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.workflow-notice span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.workflow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.button--danger {
+  border-color: rgba(240, 138, 128, 0.4);
+  background: rgba(240, 138, 128, 0.08);
+  color: var(--red);
+}
+
+.workflow-status {
+  min-height: 18px;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.result-receipt {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid rgba(126, 224, 184, 0.24);
+  background: rgba(126, 224, 184, 0.06);
+}
+
+.result-receipt__mark {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(126, 224, 184, 0.4);
+  border-radius: 50%;
+  color: var(--green);
+}
+
+.result-receipt strong,
+.result-receipt p,
+.result-receipt small {
+  display: block;
+}
+
+.result-receipt strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.result-receipt p {
+  margin: 4px 0;
+  color: var(--green);
+  font-size: 12px;
+}
+
+.result-receipt small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+@media (max-width: 980px) {
+  .workflow-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .upload-panel,
+  .operation-panel {
+    padding: 18px;
+  }
+
+  .selected-image {
+    grid-template-columns: 1fr;
+  }
+
+  .selected-image dl {
+    grid-template-columns: 1fr;
+  }
+}

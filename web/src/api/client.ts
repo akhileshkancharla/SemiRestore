@@ -25,6 +25,13 @@ export class ApiRequestError extends Error {
   }
 }
 
+export class RequestCancelledError extends Error {
+  constructor() {
+    super("The request was cancelled.");
+    this.name = "RequestCancelledError";
+  }
+}
+
 async function request<T>(
   path: string,
   init?: RequestInit,
@@ -36,12 +43,24 @@ async function request<T>(
       ...init,
       headers: { Accept: "application/json", ...init?.headers },
     });
-  } catch {
+  } catch (cause) {
+    if (init?.signal?.aborted || (cause instanceof DOMException && cause.name === "AbortError")) {
+      throw new RequestCancelledError();
+    }
     throw new ApiRequestError("The SemiRestore API could not be reached.", 0, "offline", null);
   }
 
   if (acceptedStatuses.includes(response.status)) {
-    return (await response.json()) as T;
+    try {
+      return (await response.json()) as T;
+    } catch {
+      throw new ApiRequestError(
+        "The SemiRestore API returned an unexpected response.",
+        response.status,
+        "unexpected_response",
+        response.headers.get("x-request-id"),
+      );
+    }
   }
 
   let envelope: ErrorResponse | null = null;
@@ -70,19 +89,22 @@ export const apiClient = {
   getReady: () => request<ReadyResponse>("/health/ready", undefined, [200, 503]),
   getModelHealth: () => request<ModelHealthResponse>("/health/model"),
   getVersion: () => request<VersionResponse>("/version"),
-  analyze: (image: File) =>
+  analyze: (image: File, signal?: AbortSignal) =>
     request<AnalyzeResponse>("/api/v1/analyze", {
       method: "POST",
       body: imageForm(image),
+      signal,
     }),
-  restore: (image: File) =>
+  restore: (image: File, signal?: AbortSignal) =>
     request<RestoreResponse>("/api/v1/restore", {
       method: "POST",
       body: imageForm(image),
+      signal,
     }),
-  restoreAndAnalyze: (image: File) =>
+  restoreAndAnalyze: (image: File, signal?: AbortSignal) =>
     request<RestoreResponse>("/api/v1/restore-and-analyze", {
       method: "POST",
       body: imageForm(image),
+      signal,
     }),
 };

@@ -43,10 +43,13 @@ def test_dashboard_runtime_proxies_only_the_service_prefix() -> None:
     assert "server_tokens off;" in nginx
 
 
-def test_dashboard_source_uses_typed_client_and_defers_workspace() -> None:
+def test_dashboard_source_uses_typed_client_and_bounded_upload_workflow() -> None:
     client = (WEB / "src" / "api" / "client.ts").read_text(encoding="utf-8")
     types = (WEB / "src" / "api" / "types.ts").read_text(encoding="utf-8")
     inspection = (WEB / "src" / "pages" / "InspectionPage.tsx").read_text(
+        encoding="utf-8"
+    )
+    upload = (WEB / "src" / "components" / "UploadWorkflow.tsx").read_text(
         encoding="utf-8"
     )
 
@@ -54,8 +57,11 @@ def test_dashboard_source_uses_typed_client_and_defers_workspace() -> None:
     assert "ApiRequestError" in client
     assert "interface RestoreResponse" in types
     assert "interface AnalyzeResponse" in types
-    assert "Milestone 19" in inspection
-    assert not re.search(r"type=[\"']file[\"']", inspection)
+    assert "UploadWorkflow" in inspection
+    assert re.search(r'type="file"', upload)
+    assert "SUPPORTED_IMAGE_TYPES" in upload
+    assert "AbortController" in upload
+    assert "URL.revokeObjectURL" in upload
 
 
 def test_compose_keeps_dashboard_optional_and_api_only_independent() -> None:

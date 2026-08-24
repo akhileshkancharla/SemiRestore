@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { API_BASE_URL, ApiRequestError, apiClient } from "./client";
+import { API_BASE_URL, ApiRequestError, RequestCancelledError, apiClient } from "./client";
 
 function jsonResponse(body: unknown, status = 200, headers?: HeadersInit): Response {
   return new Response(JSON.stringify(body), {
@@ -89,5 +89,24 @@ describe("typed API client", () => {
       code: "offline",
       message: "The SemiRestore API could not be reached.",
     });
+  });
+
+  it("preserves cancellation as a distinct client state", async () => {
+    const controller = new AbortController();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+        controller.abort();
+        return Promise.reject(
+          init?.signal?.aborted
+            ? new DOMException("operation aborted", "AbortError")
+            : new Error("unexpected"),
+        );
+      }),
+    );
+
+    await expect(
+      apiClient.analyze(new File(["image"], "sample.png"), controller.signal),
+    ).rejects.toBeInstanceOf(RequestCancelledError);
   });
 });
