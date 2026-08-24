@@ -4,59 +4,61 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Response, status
 
 from semirestore import __version__
 from semirestore.api.application import ApplicationRuntime
 from semirestore.api.dependencies import get_runtime
-from semirestore.platform import ModelHealth
+from semirestore.api.schemas import (
+    LiveResponse,
+    ModelHealthResponse,
+    ReadyResponse,
+    VersionResponse,
+)
 
 router = APIRouter(tags=["operations"])
 
 RuntimeDependency = Annotated[ApplicationRuntime, Depends(get_runtime)]
 
 
-def _model_health_content(health: ModelHealth) -> dict[str, str | bool | None]:
-    """Serialize only model metadata approved by the platform protocol."""
-    return {
-        "state": health.state.value,
-        "ready": health.ready,
-        "device": health.device,
-        "model_version": health.model_version,
-        "checkpoint_checksum": health.checkpoint_checksum,
-        "unavailable_reason": health.unavailable_reason,
-    }
-
-
-@router.get("/health/live")
-def live() -> dict[str, str]:
+@router.get("/health/live", response_model=LiveResponse)
+def live() -> LiveResponse:
     """Report API process liveness without consulting the model service."""
-    return {"status": "alive"}
+    return LiveResponse()
 
 
-@router.get("/health/ready")
-def ready(runtime: RuntimeDependency) -> JSONResponse:
+@router.get(
+    "/health/ready",
+    response_model=ReadyResponse,
+    responses={status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ReadyResponse}},
+)
+def ready(runtime: RuntimeDependency, response: Response) -> ReadyResponse:
     """Report whether this process can currently accept restoration work."""
     health = runtime.model_health()
-    response_status = status.HTTP_200_OK if health.ready else status.HTTP_503_SERVICE_UNAVAILABLE
-    return JSONResponse(
-        status_code=response_status,
-        content={
-            "ready": health.ready,
-            "state": health.state.value,
-            "unavailable_reason": health.unavailable_reason,
-        },
+    if not health.ready:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    return ReadyResponse(
+        ready=health.ready,
+        state=health.state,
+        unavailable_reason=health.unavailable_reason,
     )
 
 
-@router.get("/health/model")
-def model_health(runtime: RuntimeDependency) -> dict[str, str | bool | None]:
+@router.get("/health/model", response_model=ModelHealthResponse)
+def model_health(runtime: RuntimeDependency) -> ModelHealthResponse:
     """Return safe model-service readiness and provenance metadata."""
-    return _model_health_content(runtime.model_health())
+    health = runtime.model_health()
+    return ModelHealthResponse(
+        state=health.state,
+        ready=health.ready,
+        device=health.device,
+        model_version=health.model_version,
+        checkpoint_checksum=health.checkpoint_checksum,
+        unavailable_reason=health.unavailable_reason,
+    )
 
 
-@router.get("/version")
-def version() -> dict[str, str]:
+@router.get("/version", response_model=VersionResponse)
+def version() -> VersionResponse:
     """Return stable package version metadata."""
-    return {"application": "semirestore", "version": __version__}
+    return VersionResponse(version=__version__)
