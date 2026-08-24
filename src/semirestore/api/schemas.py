@@ -80,7 +80,7 @@ class RestoredImageResponse(ResponseModel):
     """Base64-encoded restored image payload."""
 
     encoding: Literal["base64"] = "base64"
-    media_type: Literal["image/png", "image/jpeg", "image/tiff"]
+    media_type: Literal["image/png"]
     content: str = Field(min_length=1)
     width: int = Field(gt=0)
     height: int = Field(gt=0)
@@ -99,12 +99,15 @@ class InferenceResponse(ResponseModel):
 
     latency_ms: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     device: str | None = None
+    phase_latency_ms: dict[str, float] = Field(default_factory=dict)
 
 
 class ModelIdentityResponse(ResponseModel):
     """Available model identity metadata."""
 
+    name: str | None = None
     version: str | None = None
+    training_revision: str | None = None
     checkpoint_checksum: str | None = None
 
 
@@ -116,4 +119,36 @@ class RestoreResponse(ResponseModel):
     inference: InferenceResponse
     model: ModelIdentityResponse
     diagnostics: dict[str, JsonValue] = Field(default_factory=dict)
+    warnings: tuple[str, ...] = ()
+
+
+class AnalyzeInputResponse(ResponseModel):
+    """Transport metadata for an analyzed input image."""
+
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+    media_type: Literal["image/png", "image/jpeg", "image/tiff"]
+
+
+class AnalysisTimingResponse(ResponseModel):
+    """Model-owned diagnostic execution timing."""
+
+    latency_ms: float = Field(ge=0, allow_inf_nan=False)
+
+
+class SuitabilityResponse(ResponseModel):
+    """Explainable advisory suitability result, never a confidence score."""
+
+    recommendation: Literal["restore", "warn", "bypass"]
+    reasons: tuple[str, ...]
+    advisory_not_probability: Literal[True] = True
+
+
+class AnalyzeResponse(ResponseModel):
+    """Complete input-only scientific diagnostic response."""
+
+    input: AnalyzeInputResponse
+    analysis: AnalysisTimingResponse
+    diagnostics: dict[str, JsonValue]
+    suitability: SuitabilityResponse
     warnings: tuple[str, ...] = ()

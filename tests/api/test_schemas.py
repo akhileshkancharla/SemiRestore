@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from semirestore.api.schemas import (
+    AnalysisTimingResponse,
+    AnalyzeInputResponse,
+    AnalyzeResponse,
     ErrorBody,
     ErrorCode,
     ErrorResponse,
     LiveResponse,
     ModelHealthResponse,
     ReadyResponse,
+    SuitabilityResponse,
     VersionResponse,
 )
 from semirestore.platform import ModelServiceState
@@ -72,3 +76,28 @@ def test_error_envelope_keeps_request_id_shape_when_unavailable() -> None:
     )
 
     assert response.model_dump(mode="json")["error"]["request_id"] is None
+
+
+def test_analysis_schema_serializes_diagnostics_and_advisory_suitability() -> None:
+    response = AnalyzeResponse(
+        input=AnalyzeInputResponse(width=10, height=8, media_type="image/png"),
+        analysis=AnalysisTimingResponse(latency_ms=4.5),
+        diagnostics={"intensity": {"version": "v1"}},
+        suitability=SuitabilityResponse(
+            recommendation="warn",
+            reasons=("Controlled public reason.",),
+        ),
+        warnings=("Controlled public warning.",),
+    )
+
+    assert response.model_dump(mode="json") == {
+        "input": {"width": 10, "height": 8, "media_type": "image/png"},
+        "analysis": {"latency_ms": 4.5},
+        "diagnostics": {"intensity": {"version": "v1"}},
+        "suitability": {
+            "recommendation": "warn",
+            "reasons": ["Controlled public reason."],
+            "advisory_not_probability": True,
+        },
+        "warnings": ["Controlled public warning."],
+    }

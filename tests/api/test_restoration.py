@@ -57,9 +57,15 @@ def test_successful_png_restoration_serializes_complete_contract(
         "height": 2,
     }
     assert body["input"] == {"width": 4, "height": 3, "media_type": "image/png"}
-    assert body["inference"] == {"latency_ms": 12.5, "device": "test-device"}
+    assert body["inference"] == {
+        "latency_ms": 12.5,
+        "device": "test-device",
+        "phase_latency_ms": {"restoration_total": 12.5},
+    }
     assert body["model"] == {
+        "name": "synthetic-naf-sr",
         "version": "synthetic-test-model",
+        "training_revision": "synthetic-revision",
         "checkpoint_checksum": f"sha256:{'a' * 64}",
     }
     assert body["diagnostics"] == {"synthetic": True, "source_format": "PNG"}
@@ -263,8 +269,17 @@ def test_unavailable_optional_result_metadata_remains_explicitly_empty(
         )
 
     assert response.status_code == 200
-    assert response.json()["inference"] == {"latency_ms": None, "device": None}
-    assert response.json()["model"] == {"version": None, "checkpoint_checksum": None}
+    assert response.json()["inference"] == {
+        "latency_ms": None,
+        "device": None,
+        "phase_latency_ms": {},
+    }
+    assert response.json()["model"] == {
+        "name": None,
+        "version": None,
+        "training_revision": None,
+        "checkpoint_checksum": None,
+    }
     assert response.json()["diagnostics"] == {}
     assert response.json()["warnings"] == []
 
@@ -307,6 +322,15 @@ def test_openapi_describes_multipart_input_and_typed_response() -> None:
     assert "multipart/form-data" in operation["requestBody"]["content"]
     success_schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
     assert success_schema == {"$ref": "#/components/schemas/RestoreResponse"}
+    analysis_operation = schema["paths"]["/api/v1/analyze"]["post"]
+    combined_operation = schema["paths"]["/api/v1/restore-and-analyze"]["post"]
+    assert "multipart/form-data" in analysis_operation["requestBody"]["content"]
+    assert analysis_operation["responses"]["200"]["content"]["application/json"][
+        "schema"
+    ] == {"$ref": "#/components/schemas/AnalyzeResponse"}
+    assert combined_operation["responses"]["200"]["content"]["application/json"][
+        "schema"
+    ] == {"$ref": "#/components/schemas/RestoreResponse"}
 
 
 def test_health_endpoints_remain_compatible(fake_model_service: Any) -> None:

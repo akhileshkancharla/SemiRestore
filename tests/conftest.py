@@ -119,8 +119,11 @@ class FakeModelService:
                 original_height=upload.height,
                 inference_latency_ms=12.5,
                 device="test-device",
+                model_name="synthetic-naf-sr",
                 model_version="synthetic-test-model",
+                training_revision="synthetic-revision",
                 checkpoint_checksum=f"sha256:{'a' * 64}",
+                phase_latency_ms={"restoration_total": 12.5},
                 diagnostics={"synthetic": True, "source_format": upload.detected_format},
                 warnings=("Synthetic test output; no real restoration was performed.",),
             )

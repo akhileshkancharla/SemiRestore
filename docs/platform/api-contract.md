@@ -8,7 +8,9 @@
 | `GET /health/ready` | HTTP 200 or 503 `ReadyResponse` | Ability to accept restoration work |
 | `GET /health/model` | HTTP 200 `ModelHealthResponse` | Safe model readiness and identity metadata |
 | `GET /version` | HTTP 200 `VersionResponse` | Application name and package version |
+| `POST /api/v1/analyze` | HTTP 200 `AnalyzeResponse` | Run input-only model diagnostics |
 | `POST /api/v1/restore` | HTTP 200 `RestoreResponse` | Validate and restore one multipart image |
+| `POST /api/v1/restore-and-analyze` | HTTP 200 `RestoreResponse` | Explicit complete pipeline operation |
 | `GET /metrics` | Prometheus text | Operational metrics; intentionally excluded from OpenAPI |
 
 OpenAPI documents the health and version operations, the multipart restoration
@@ -58,10 +60,17 @@ The JSON success body is:
   },
   "inference": {
     "latency_ms": 125.0,
-    "device": "cpu"
+    "device": "cpu",
+    "phase_latency_ms": {
+      "preprocessing": 10.0,
+      "restoration_total": 125.0,
+      "total": 160.0
+    }
   },
   "model": {
+    "name": "naf_sr",
     "version": "<safe-public-version>",
+    "training_revision": "<safe-public-revision>",
     "checkpoint_checksum": "sha256:<digest>"
   },
   "diagnostics": {},
@@ -69,10 +78,13 @@ The JSON success body is:
 }
 ```
 
-The output media type is independent of the input media type. Dimensions must
-describe the corresponding encoded image and input. Optional inference and
-model fields remain explicit `null` values when the adapter cannot provide
-them. Diagnostics must be JSON-compatible; warnings must be safe public text.
+The scientific output is always lossless PNG, independent of the input media
+type. Dimensions must describe the corresponding encoded image and input.
+Optional inference and model fields remain explicit `null` values when the
+adapter cannot provide them. Diagnostics preserve input/restored measurements,
+suitability, quality indicators, restoration/spatial/tile/clipping metadata,
+phase timings, and limitations as JSON primitives. Warnings must be safe public
+text.
 
 ## Base64 transport
 
@@ -81,6 +93,16 @@ but Base64 adds approximately one-third size overhead before JSON framing. The
 current endpoint is appropriate for bounded requests, not bulk result transfer.
 A future binary or object-storage transport would require a separately versioned
 contract and privacy review.
+
+### Analysis operation
+
+`POST /api/v1/analyze` uses the same multipart upload validation and application
+capacity gate, then returns the model-owned preprocessing, intensity, and
+structural diagnostic projections without restored image bytes. Its suitability
+recommendation is explicitly advisory rather than a probability or correctness
+claim. `POST /api/v1/restore-and-analyze` names the complete pipeline operation
+explicitly; `/api/v1/restore` remains backward-compatible and uses the same
+complete scientific result boundary.
 
 ## Upload security
 

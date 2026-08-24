@@ -77,8 +77,11 @@ class RestorationResult:
     original_height: int
     inference_latency_ms: float | None = None
     device: str | None = None
+    model_name: str | None = None
     model_version: str | None = None
+    training_revision: str | None = None
     checkpoint_checksum: str | None = None
+    phase_latency_ms: Mapping[str, float] = field(default_factory=dict)
     diagnostics: Mapping[str, JsonValue] = field(default_factory=dict)
     warnings: tuple[str, ...] = ()
 
@@ -108,8 +111,28 @@ class RestorationResult:
             object.__setattr__(self, "inference_latency_ms", float(latency))
 
         _validate_safe_text(self.device, "device")
+        _validate_safe_text(self.model_name, "model name")
         _validate_safe_text(self.model_version, "model version")
+        _validate_safe_text(self.training_revision, "training revision")
         _validate_safe_text(self.checkpoint_checksum, "checkpoint checksum")
+
+        phases: dict[str, float] = {}
+        if not isinstance(self.phase_latency_ms, Mapping):
+            raise ValueError("phase latency must be a mapping")
+        for name, latency in self.phase_latency_ms.items():
+            if (
+                not isinstance(name, str)
+                or not name
+                or len(name) > 64
+                or not name.isidentifier()
+                or not isinstance(latency, (int, float))
+                or isinstance(latency, bool)
+                or not math.isfinite(latency)
+                or latency < 0
+            ):
+                raise ValueError("phase latency must contain safe names and finite values")
+            phases[name] = float(latency)
+        object.__setattr__(self, "phase_latency_ms", MappingProxyType(phases))
 
         if not isinstance(self.diagnostics, Mapping):
             raise ValueError("diagnostics must be a JSON-compatible mapping")

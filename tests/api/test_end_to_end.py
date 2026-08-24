@@ -196,7 +196,9 @@ def test_injected_service_restores_all_formats_reuses_lifecycle_and_is_private(
             "Synthetic test output; no real restoration was performed."
         ]
         assert payload["model"] == {
+            "name": "synthetic-naf-sr",
             "version": "synthetic-test-model",
+            "training_revision": "synthetic-revision",
             "checkpoint_checksum": f"sha256:{'a' * 64}",
         }
 

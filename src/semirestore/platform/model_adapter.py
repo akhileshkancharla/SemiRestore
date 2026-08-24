@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, cast
 from semirestore.intensity_diagnostics import IntensityDiagnosticError, analyze_intensity
 from semirestore.model_manager import ModelManagerClosedError, ModelNotReadyError
 from semirestore.pipeline import PipelineError, SemiRestorePipeline
+from semirestore.pipeline import RestorationResult as PipelineResult
 from semirestore.platform.model_service import (
     AnalysisResult,
     ModelHealth,
@@ -220,7 +221,29 @@ class SemiRestoreModelService:
                 pipeline.restore_and_analyze,
                 upload.encoded_bytes,
             )
+            if not isinstance(model_result, PipelineResult):
+                raise TypeError("pipeline returned an invalid result")
             projection = model_result.platform_projection()
+            projection["model_name"] = model_result.model_name
+            projection["training_revision"] = model_result.training_revision
+            projection["phase_latency_ms"] = model_result.timing_ms
+            projection["diagnostics"] = {
+                "pipeline_version": model_result.pipeline_version,
+                "input": model_result.input_diagnostics,
+                "restored": model_result.restored_diagnostics,
+                "suitability": {
+                    "recommendation": model_result.suitability_recommendation,
+                    "reasons": list(model_result.suitability_reasons),
+                    "advisory_not_probability": True,
+                },
+                "restoration": model_result.restoration_metadata,
+                "spatial": model_result.spatial_metadata,
+                "tiles": model_result.tile_metadata,
+                "clipping": model_result.clipping_metadata,
+                "quality_indicators": model_result.quality_indicators,
+                "timing_ms": model_result.timing_ms,
+                "limitations": list(model_result.limitations),
+            }
             return RestorationResult(**cast(dict[str, Any], projection))
         except asyncio.CancelledError:
             raise
