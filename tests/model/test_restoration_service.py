@@ -39,14 +39,22 @@ class ControlledUpscaleModel(nn.Module):
         self.grad_enabled: bool | None = None
         self.inference_mode_enabled: bool | None = None
         self.last_input_shape: tuple[int, ...] | None = None
+        self.conditioning_statistics: list[torch.Tensor] = []
 
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        inputs: torch.Tensor,
+        *,
+        conditioning_statistics: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         self.calls += 1
         self.last_dtype = inputs.dtype
         self.last_device = inputs.device
         self.grad_enabled = torch.is_grad_enabled()
         self.inference_mode_enabled = torch.is_inference_mode_enabled()
         self.last_input_shape = tuple(inputs.shape)
+        if conditioning_statistics is not None:
+            self.conditioning_statistics.append(conditioning_statistics.detach().cpu().clone())
         return F.interpolate(inputs, scale_factor=2, mode="nearest")
 
 

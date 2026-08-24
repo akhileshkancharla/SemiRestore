@@ -56,7 +56,7 @@ area better represents encoder/decoder work. This conservative guard remains
 lower than preprocessing's decode limit and is not a universal CPU/GPU safety
 claim. Controlled deployments may deliberately override it, but it cannot
 exceed the configured preprocessing pixel limit. Rejections explicitly advise
-using tiled inference; tiling itself is not implemented here.
+using the separately selected `restore_tiled()` path documented for Milestone 15.
 
 ## Concurrency and timing
 

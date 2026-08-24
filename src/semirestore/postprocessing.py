@@ -118,7 +118,9 @@ def _validate_original_dimensions(
     return original_width, original_height
 
 
-def _validate_raw_output(output: object) -> torch.Tensor:
+def validate_raw_restoration_output(output: object) -> torch.Tensor:
+    """Validate a raw dense floating-point restoration tensor without clipping it."""
+
     if not isinstance(output, torch.Tensor):
         raise UnsupportedOutputError("Raw model output must be a PyTorch tensor")
     if output.layout != torch.strided:
@@ -165,7 +167,7 @@ def postprocess_restoration(
     """
 
     dimensions = _validate_original_dimensions(original_width, original_height)
-    tensor = _validate_raw_output(output)
+    tensor = validate_raw_restoration_output(output)
     restored_height = int(tensor.shape[2])
     restored_width = int(tensor.shape[3])
     if dimensions is not None:
@@ -295,4 +297,5 @@ __all__ = [
     "encode_restoration",
     "postprocess_restoration",
     "quantize_restoration",
+    "validate_raw_restoration_output",
 ]

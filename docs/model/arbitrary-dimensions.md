@@ -92,4 +92,4 @@ square, and rectangular positive dimensions are supported when they pass
 preprocessing and aligned-compute limits. The final dimensions remain exactly
 twice the original dimensions. Planning does not prove that an arbitrarily
 large image fits available host or device memory; larger workloads require the
-future tiled-inference boundary.
+explicit memory-aware tiled path introduced in Milestone 15.

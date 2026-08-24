@@ -17,6 +17,55 @@ from torch.nn import functional as F
 from .naf_blocks import NAFBlock
 
 
+class ConditioningStatisticsError(ValueError):
+    """Raised when an explicit global-conditioning override is invalid."""
+
+
+def compute_conditioning_statistics(inputs: torch.Tensor) -> torch.Tensor:
+    """Return batch mean/std/min/max in the checkpoint-compatible order."""
+
+    if not isinstance(inputs, torch.Tensor) or inputs.ndim != 4:
+        raise ConditioningStatisticsError("Conditioning input must be a rank-4 tensor")
+    if not torch.is_floating_point(inputs) or inputs.is_complex():
+        raise ConditioningStatisticsError("Conditioning input must be floating point")
+    if inputs.numel() == 0 or not bool(torch.isfinite(inputs).all().item()):
+        raise ConditioningStatisticsError("Conditioning input must be nonempty and finite")
+    flattened = inputs.flatten(2)
+    return torch.cat(
+        (
+            flattened.mean(2),
+            flattened.std(2, unbiased=False),
+            flattened.amin(2),
+            flattened.amax(2),
+        ),
+        dim=1,
+    )
+
+
+def validate_conditioning_statistics(
+    statistics: object,
+    inputs: torch.Tensor,
+) -> torch.Tensor:
+    """Validate an explicit mean/std/min/max override for one input batch."""
+
+    if not isinstance(statistics, torch.Tensor):
+        raise ConditioningStatisticsError("Conditioning statistics must be a PyTorch tensor")
+    expected_shape = (inputs.shape[0], 4)
+    if statistics.layout != torch.strided or tuple(statistics.shape) != expected_shape:
+        raise ConditioningStatisticsError(
+            f"Conditioning statistics must have dense shape {expected_shape}"
+        )
+    if statistics.dtype != inputs.dtype:
+        raise ConditioningStatisticsError("Conditioning statistics dtype must match the input")
+    if statistics.device != inputs.device:
+        raise ConditioningStatisticsError("Conditioning statistics device must match the input")
+    if not bool(torch.isfinite(statistics).all().item()):
+        raise ConditioningStatisticsError("Conditioning statistics must be finite")
+    if bool((statistics[:, 1] < 0).any().item()):
+        raise ConditioningStatisticsError("Conditioning standard deviation cannot be negative")
+    return statistics
+
+
 def _block_stack(channels: int, count: int, dropout: float) -> nn.Sequential:
     if count < 1:
         raise ValueError("Every NAF stage needs at least one block")
@@ -122,18 +171,21 @@ class NAFSR(nn.Module):
             config["conditioning_hidden"] = self.conditioning_hidden
         return config
 
-    def _conditioning(self, inputs: torch.Tensor) -> list[torch.Tensor] | None:
+    def _conditioning(
+        self,
+        inputs: torch.Tensor,
+        statistics_override: torch.Tensor | None = None,
+    ) -> list[torch.Tensor] | None:
         if self.conditioner is None:
+            if statistics_override is not None:
+                raise ConditioningStatisticsError(
+                    "Conditioning statistics cannot be used by an unconditioned model"
+                )
             return None
-        flattened = inputs.flatten(2)
-        statistics = torch.cat(
-            (
-                flattened.mean(2),
-                flattened.std(2, unbiased=False),
-                flattened.amin(2),
-                flattened.amax(2),
-            ),
-            dim=1,
+        statistics = (
+            compute_conditioning_statistics(inputs)
+            if statistics_override is None
+            else validate_conditioning_statistics(statistics_override, inputs)
         )
         parameters = self.conditioner(statistics)
         return list(
@@ -153,13 +205,18 @@ class NAFSR(nn.Module):
         pad_width = (self.padder_size - width % self.padder_size) % self.padder_size
         return F.pad(inputs, (0, pad_width, 0, pad_height), mode="replicate")
 
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        inputs: torch.Tensor,
+        *,
+        conditioning_statistics: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         if inputs.ndim != 4 or inputs.shape[1] != 1:
             raise ValueError(
                 f"NAFSR expects NCHW input with one channel; got {tuple(inputs.shape)}"
             )
         height, width = inputs.shape[-2:]
-        conditioning = self._conditioning(inputs)
+        conditioning = self._conditioning(inputs, conditioning_statistics)
         condition_index = 0
         features = self.intro(self._pad(inputs))
         skips: list[torch.Tensor] = []
@@ -195,4 +252,9 @@ class NAFSR(nn.Module):
         return bicubic + learned_residual
 
 
-__all__ = ["NAFSR"]
+__all__ = [
+    "ConditioningStatisticsError",
+    "NAFSR",
+    "compute_conditioning_statistics",
+    "validate_conditioning_statistics",
+]
