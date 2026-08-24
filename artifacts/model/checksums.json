@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "checkpoints": {
+    "semirestore_conditioned": {
+      "model_name": "naf_sr",
+      "model_version": "conditioned-d037473",
+      "architecture": "statistics-conditioned NAF-SR",
+      "scale": 2,
+      "expected_parameter_count": 9111684,
+      "source_artifact_path": "local/artifacts/naf_sr_conditioned_d037473/best.pt",
+      "runtime_artifact_path": "artifacts/model/semirestore_conditioned.pt",
+      "sha256": "273abd9d6dcfa9bdee71ac15016994962304b6c9d902898b4f4d503bed158c28",
+      "size_bytes": 36565383,
+      "training_revision": "d037473ddf4a3cd20eb3fef933991cd66749f4f2",
+      "checkpoint_role": "deployable best-validation weights",
+      "verification_status": "verified against immutable local source",
+      "binary_storage": "ignored runtime artifact; excluded from Git"
+    }
+  }
+}

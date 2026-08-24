@@ -45,6 +45,9 @@ semirestore = ["py.typed"]
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
+markers = [
+  "local_checkpoint: requires the verified ignored runtime checkpoint",
+]
 
 [tool.ruff]
 line-length = 100

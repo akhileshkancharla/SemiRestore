@@ -1,0 +1,12 @@
+# Deployment architecture subset copied from:
+# local/artifacts/naf_sr_conditioned_d037473/resolved_config.yaml
+# Historical data, runtime, training, and output paths are intentionally omitted.
+model:
+  name: naf_sr
+  width: 48
+  encoder_blocks: [2, 2, 4]
+  middle_blocks: 6
+  decoder_blocks: [2, 2, 2]
+  dropout: 0.0
+  statistics_conditioning: true
+  conditioning_hidden: 64
