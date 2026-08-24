@@ -93,6 +93,10 @@ def _config(**overrides: object) -> TrainerConfig:
         "metric_data_range": 1.0,
         "metric_data_min": 0.0,
         "metric_range_policy": "clip",
+        "amp_enabled": False,
+        "ema_enabled": False,
+        "ema_decay": 0.999,
+        "best_validation_metric": "psnr_db",
     }
     values.update(overrides)
     return TrainerConfig(**values)

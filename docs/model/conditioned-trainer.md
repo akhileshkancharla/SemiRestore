@@ -15,6 +15,6 @@ values. Dependency injection permits controlled small-model tests without
 starting a 9.1-million-parameter training run.
 
 No work begins at import or construction time. Callers must explicitly invoke
-`train_step`, `validate`, or bounded `fit`. This milestone deliberately has no
-AMP, EMA, resume workflow, checkpoint serialization, or checkpoint rotation;
-those resilience features belong to Milestone 20.
+`train_step`, `validate`, or bounded `fit`. Mixed precision, EMA, and resumable
+checkpoint behavior are documented separately because they extend this core
+loop without changing its data or optimizer semantics.
