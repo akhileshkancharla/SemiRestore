@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 from fastapi import FastAPI
 
+from semirestore import __version__
 from semirestore.platform import ModelHealth, ModelService, ModelServiceState, RuntimeSettings
 
 ModelServiceFactory = Callable[[RuntimeSettings], ModelService]
@@ -87,6 +88,9 @@ def create_app(
                 except Exception:
                     pass
 
-    app = FastAPI(title="SemiRestore", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="SemiRestore", version=__version__, lifespan=lifespan)
     app.state.runtime = runtime
+    from semirestore.api.routes.operations import router as operations_router
+
+    app.include_router(operations_router)
     return app
