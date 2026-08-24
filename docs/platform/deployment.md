@@ -26,7 +26,7 @@ docker build -t semirestore:platform .
 docker run --rm -p 8000:8000 semirestore:platform
 ```
 
-Without the real adapter, expected container behavior is:
+Without the runtime checkpoint mount, expected container behavior is:
 
 - `/health/live` succeeds;
 - `/health/ready` returns HTTP 503 unready;
@@ -51,21 +51,23 @@ and readiness must remain separate probes.
 ## Runtime model artifacts
 
 The image does not contain or download checkpoints, uploads, outputs, or private
-datasets. When the real adapter exists, mount verified configuration and
-checkpoint artifacts read-only and pass their paths through settings. For
-example, after adapting host paths and the production image tag:
+datasets. It contains only the tracked resolved model configuration and checksum
+manifest, and points the integrated adapter to those files with
+`SEMIRESTORE_MODEL_CONFIG_PATH` and `SEMIRESTORE_MODEL_METADATA_PATH`. Mount the
+verified checkpoint read-only at the configured runtime path:
 
 ```sh
 docker run --rm -p 8000:8000 \
-  --mount type=bind,src=/absolute/host/model.pt,dst=/models/model.pt,readonly \
-  --env SEMIRESTORE_CHECKPOINT_PATH=/models/model.pt \
+  --mount type=bind,src=/absolute/host/semirestore_conditioned.pt,dst=/models/semirestore_conditioned.pt,readonly \
   semirestore:platform
 ```
 
-A configured path does not make an unintegrated service ready. The future
-adapter must verify existence, regular-file type, compatibility, and checksum
-during startup. Secrets should use deployment-managed secret mechanisms, not
-Docker `ARG`, image `ENV`, or committed files.
+The production adapter verifies existence, regular-file type, compatibility,
+and checksum during startup. A missing or invalid mount leaves the API live but
+unready; it never enables synthetic restoration. Alternate read-only paths may
+be supplied with all three model environment variables. Secrets should use
+deployment-managed secret mechanisms, not Docker `ARG`, image `ENV`, or
+committed files.
 
 Where supported, operators should also evaluate a read-only root filesystem, a
 small writable `/tmp` tmpfs, dropped capabilities, and `no-new-privileges`.
@@ -84,10 +86,9 @@ concurrency limit validated against the actual model remain the safe default.
 
 ## Known limitations
 
-- The final model adapter and real `SemiRestorePipeline` integration are not
-  implemented.
-- Real checkpoint loading, compatibility validation, and scientific behavior
-  remain model-owned.
+- The real adapter is integrated, but readiness still requires the external
+  verified checkpoint.
+- Checkpoint contents and scientific behavior remain model-owned.
 - Docker build and container execution have not been performed locally.
 - GPU packaging and runtime validation are not implemented.
 - Base64 adds approximately one-third response overhead.

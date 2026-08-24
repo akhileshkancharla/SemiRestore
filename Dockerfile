@@ -24,15 +24,24 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     SEMIRESTORE_HOST=0.0.0.0 \
     SEMIRESTORE_PORT=8000 \
     SEMIRESTORE_DEVICE_PREFERENCE=cpu \
+    SEMIRESTORE_MODEL_CONFIG_PATH=/opt/semirestore/model/resolved_conditioned.yaml \
+    SEMIRESTORE_MODEL_METADATA_PATH=/opt/semirestore/model/checksums.json \
+    SEMIRESTORE_CHECKPOINT_PATH=/models/semirestore_conditioned.pt \
     SEMIRESTORE_ENABLE_FAKE_MODEL_SERVICE=false
 
 WORKDIR /app
 
 RUN groupadd --gid 10001 semirestore \
     && useradd --uid 10001 --gid 10001 --no-create-home \
-        --home-dir /nonexistent --shell /usr/sbin/nologin semirestore
+        --home-dir /nonexistent --shell /usr/sbin/nologin semirestore \
+    && mkdir -p /opt/semirestore/model /models \
+    && chown 10001:10001 /opt/semirestore/model /models
 
 COPY --from=builder /wheels/ /wheels/
+COPY --chown=10001:10001 configs/model/resolved_conditioned.yaml \
+    /opt/semirestore/model/resolved_conditioned.yaml
+COPY --chown=10001:10001 artifacts/model/checksums.json \
+    /opt/semirestore/model/checksums.json
 
 RUN set -eu; \
     set -- /wheels/semirestore-*.whl; \
@@ -56,4 +65,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
     CMD ["python", "-c", "import urllib.request; response = urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2); raise SystemExit(0 if 200 <= response.status < 300 else 1)"]
 
-CMD ["python", "-m", "uvicorn", "semirestore.api:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+CMD ["python", "-m", "uvicorn", "semirestore.api:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--timeout-graceful-shutdown", "30"]

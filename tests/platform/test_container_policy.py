@@ -78,6 +78,15 @@ def test_runtime_has_safe_python_pip_and_cpu_environment() -> None:
     assert "PIP_NO_CACHE_DIR=1" in runtime
     assert "SEMIRESTORE_ENVIRONMENT=production" in runtime
     assert "SEMIRESTORE_DEVICE_PREFERENCE=cpu" in runtime
+    assert (
+        "SEMIRESTORE_MODEL_CONFIG_PATH=/opt/semirestore/model/resolved_conditioned.yaml"
+        in runtime
+    )
+    assert (
+        "SEMIRESTORE_MODEL_METADATA_PATH=/opt/semirestore/model/checksums.json"
+        in runtime
+    )
+    assert "SEMIRESTORE_CHECKPOINT_PATH=/models/semirestore_conditioned.pt" in runtime
     assert "SEMIRESTORE_ENABLE_FAKE_MODEL_SERVICE=false" in runtime
     assert "WORKDIR /app" in runtime
     assert "EXPOSE 8000" in runtime
@@ -143,6 +152,7 @@ def test_runtime_is_non_root_before_exec_form_single_worker_startup() -> None:
     assert '"semirestore.api:create_app"' in command
     assert '"--factory"' in command
     assert re.search(r'"--workers"\s*,\s*"1"', command)
+    assert re.search(r'"--timeout-graceful-shutdown"\s*,\s*"30"', command)
     assert "--reload" not in command
     assert "gunicorn" not in command.lower()
 
@@ -176,7 +186,6 @@ def test_dockerfile_never_copies_forbidden_runtime_material() -> None:
     for forbidden in (
         "local/",
         "local/artifacts",
-        "artifacts/",
         ".env",
         ".pt",
         ".pth",
@@ -186,6 +195,29 @@ def test_dockerfile_never_copies_forbidden_runtime_material() -> None:
         "runs/",
     ):
         assert all(forbidden not in instruction for instruction in copies)
+
+    artifact_copies = [instruction for instruction in copies if "artifacts/" in instruction]
+    assert artifact_copies == [
+        "copy --chown=10001:10001 artifacts/model/checksums.json "
+        "/opt/semirestore/model/checksums.json"
+    ]
+    assert all("best.pt" not in instruction for instruction in copies)
+
+
+def test_runtime_copies_only_tracked_model_configuration_and_metadata() -> None:
+    runtime = "\n".join(runtime_instructions())
+
+    assert (
+        "COPY --chown=10001:10001 configs/model/resolved_conditioned.yaml "
+        "/opt/semirestore/model/resolved_conditioned.yaml"
+        in runtime
+    )
+    assert (
+        "COPY --chown=10001:10001 artifacts/model/checksums.json "
+        "/opt/semirestore/model/checksums.json"
+        in runtime
+    )
+    assert "mkdir -p /opt/semirestore/model /models" in runtime
 
 
 def test_dockerfile_has_no_secret_arguments_network_tools_or_gpu_runtime() -> None:
@@ -243,3 +275,8 @@ def test_dockerignore_keeps_required_build_inputs() -> None:
     assert "pyproject.toml" not in patterns
     assert "README.md" not in patterns
     assert "!src/" not in patterns
+    assert "!artifacts/model/" in patterns
+    assert "!artifacts/" in patterns
+    assert "artifacts/*" in patterns
+    assert "artifacts/model/*" in patterns
+    assert "!artifacts/model/checksums.json" in patterns

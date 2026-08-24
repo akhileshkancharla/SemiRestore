@@ -25,6 +25,11 @@ local/
 local/brand/
 local/artifacts/
 artifacts/
+!artifacts/
+artifacts/*
+!artifacts/model/
+artifacts/model/*
+!artifacts/model/checksums.json
 outputs/
 uploads/
 runs/
