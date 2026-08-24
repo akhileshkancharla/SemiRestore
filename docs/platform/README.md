@@ -37,6 +37,7 @@ the final handoff requirements without repeating their details.
 23. [Privacy and non-persistence](architecture.md#privacy-boundary)
 24. [Known limitations](deployment.md#known-limitations)
 25. [Teammate integration checklist](integration-checklist.md)
+26. [Dashboard and local Compose stack](local-stack.md#dashboard-development)
 
 ## Ownership boundary
 

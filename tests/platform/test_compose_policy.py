@@ -29,7 +29,7 @@ def test_compose_defines_api_dashboard_and_optional_prometheus() -> None:
     assert set(services) == {"api", "dashboard", "prometheus"}
     assert services["dashboard"]["profiles"] == ["dashboard"]
     assert services["prometheus"]["profiles"] == ["observability"]
-    assert services["dashboard"]["image"] == "nginx:1.27-alpine"
+    assert services["dashboard"]["image"] == "semirestore:dashboard"
     assert services["prometheus"]["image"] == "prom/prometheus:v2.55.1"
     assert all(not service.get("image", "").endswith(":latest") for service in services.values())
 
@@ -69,6 +69,17 @@ def test_health_based_dependencies_and_network_boundaries_are_explicit() -> None
     assert config["networks"]["backend"]["internal"] is True
 
 
+def test_dashboard_build_uses_the_frontend_context_and_internal_api_proxy() -> None:
+    dashboard = compose()["services"]["dashboard"]
+
+    assert dashboard["build"]["context"] == "./web"
+    assert dashboard["build"]["dockerfile"] == "Dockerfile"
+    assert dashboard["build"]["args"]["VITE_API_BASE_URL"].endswith(":-/service}")
+    assert dashboard["ports"] == ["${SEMIRESTORE_DASHBOARD_PORT:-5173}:8080"]
+    assert "127.0.0.1:8080" in " ".join(dashboard["healthcheck"]["test"])
+    assert "environment" not in dashboard
+
+
 def test_services_have_resource_conscious_defaults() -> None:
     services = compose()["services"]
 
@@ -105,6 +116,7 @@ def test_example_environment_is_safe_and_contains_no_secrets_or_absolute_paths()
     assert "SEMIRESTORE_CHECKPOINT_HOST_PATH=" in text
     assert "SEMIRESTORE_DEVICE_PREFERENCE=cpu" in text
     assert "SEMIRESTORE_INFERENCE_CONCURRENCY_LIMIT=1" in text
+    assert "SEMIRESTORE_DASHBOARD_API_BASE_URL=/service" in text
     assert not re.search(r"(?i)(password|secret|credential|token|api[_-]?key)=", text)
     assert all(not re.match(r"^(?:[A-Za-z]:[\\/]|/home/|/Users/)", value) for value in values)
 

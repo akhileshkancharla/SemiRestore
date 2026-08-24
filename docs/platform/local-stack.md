@@ -27,16 +27,40 @@ docker compose --profile observability up --build api prometheus
 docker compose --profile dashboard --profile observability up --build
 ```
 
-The dashboard service is an Nginx placeholder until the Milestone 18 frontend
-image replaces it. It waits for API readiness. Prometheus starts when the API
-process starts because `/metrics` remains useful while the model is unready; its
-scrape configuration uses only the private `backend` network.
+The dashboard profile builds the React/Vite inspection console and serves its
+static assets from an unprivileged Nginx runtime on
+`http://localhost:${SEMIRESTORE_DASHBOARD_PORT:-5173}`. It waits for API
+readiness, then proxies browser requests from `/service` to the API over the
+Compose `frontend` network. `SEMIRESTORE_DASHBOARD_API_BASE_URL` is a build-time
+URL for deployments that need another same-origin prefix; `/service` is the
+safe local default. API-only operation remains independent of the dashboard.
+
+Prometheus starts when the API process starts because `/metrics` remains useful
+while the model is unready; its scrape configuration uses only the private
+`backend` network.
 
 Resource defaults are intentionally conservative and configurable through the
 safe `.env.example` keys. The API retains one worker and one process-local model
 instance. The checkpoint mount, Prometheus configuration mount, and model image
 inputs are read-only. No secret or machine-specific absolute path belongs in
 Compose or the example environment file.
+
+## Dashboard development
+
+The frontend requires Node.js 24 or newer. During direct development, Vite
+proxies `/service` to `http://127.0.0.1:8000`; override that development target
+with `SEMIRESTORE_DEV_API_URL` when needed:
+
+```sh
+cd web
+npm install
+npm run dev
+```
+
+Run `npm run lint`, `npm run test:run`, and `npm run build` before packaging.
+The dashboard currently provides routing, operational status, readiness, and a
+typed API boundary. Image upload and the complete restoration workspace remain
+intentionally outside this foundation milestone.
 
 ## Health and shutdown
 

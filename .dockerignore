@@ -21,6 +21,7 @@ dist/
 *.egg-info/
 
 tests/
+web/
 local/
 local/brand/
 local/artifacts/
