@@ -59,6 +59,8 @@ def test_settings_load_typed_environment_overrides(monkeypatch: pytest.MonkeyPat
         ("SEMIRESTORE_INFERENCE_CONCURRENCY_LIMIT", "0"),
         ("SEMIRESTORE_CONCURRENCY_ACQUISITION_TIMEOUT_SECONDS", "0"),
         ("SEMIRESTORE_INFERENCE_TIMEOUT_SECONDS", "0"),
+        ("SEMIRESTORE_CONCURRENCY_ACQUISITION_TIMEOUT_SECONDS", "inf"),
+        ("SEMIRESTORE_INFERENCE_TIMEOUT_SECONDS", "nan"),
     ],
 )
 def test_settings_reject_non_positive_limits(

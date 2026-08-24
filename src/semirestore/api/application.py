@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from fastapi import FastAPI
 
 from semirestore import __version__
+from semirestore.api.concurrency import InferenceGate
 from semirestore.api.errors import register_exception_handlers
 from semirestore.platform import ModelHealth, ModelService, ModelServiceState, RuntimeSettings
 
@@ -21,6 +22,7 @@ class ApplicationRuntime:
 
     settings: RuntimeSettings
     model_service: ModelService | None = None
+    inference_gate: InferenceGate | None = None
     startup_complete: bool = False
     unavailable_reason: str = "model service startup is in progress"
 
@@ -58,6 +60,13 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         service: ModelService | None = None
+        runtime.inference_gate = InferenceGate(
+            concurrency_limit=runtime.settings.inference_concurrency_limit,
+            acquisition_timeout_seconds=(
+                runtime.settings.concurrency_acquisition_timeout_seconds
+            ),
+            execution_timeout_seconds=runtime.settings.inference_timeout_seconds,
+        )
         try:
             if model_service_factory is None:
                 runtime.unavailable_reason = "model service adapter is not configured"
@@ -81,6 +90,7 @@ def create_app(
         finally:
             started_service = runtime.model_service
             runtime.model_service = None
+            runtime.inference_gate = None
             runtime.startup_complete = False
             runtime.unavailable_reason = "model service has stopped"
             if started_service is not None:

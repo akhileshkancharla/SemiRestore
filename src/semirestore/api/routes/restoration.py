@@ -8,7 +8,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, UploadFile
 
 from semirestore.api.application import ApplicationRuntime
-from semirestore.api.dependencies import get_model_service, get_runtime
+from semirestore.api.dependencies import (
+    get_runtime,
+    require_inference_gate,
+    require_model_service,
+)
 from semirestore.api.errors import RestorationFailedError
 from semirestore.api.schemas import (
     InferenceResponse,
@@ -18,12 +22,11 @@ from semirestore.api.schemas import (
     RestoreResponse,
 )
 from semirestore.api.uploads import ValidatedUpload, validate_upload
-from semirestore.platform import ModelService, ModelServiceUnavailableError, RestorationResult
+from semirestore.platform import ModelServiceUnavailableError, RestorationResult
 
 router = APIRouter(prefix="/api/v1", tags=["restoration"])
 
 RuntimeDependency = Annotated[ApplicationRuntime, Depends(get_runtime)]
-ModelServiceDependency = Annotated[ModelService, Depends(get_model_service)]
 ImageUpload = Annotated[
     UploadFile | None,
     File(description="One PNG, JPEG, or single-frame TIFF SEM image."),
@@ -62,15 +65,17 @@ def _validate_service_result(
 @router.post("/restore", response_model=RestoreResponse)
 async def restore(
     runtime: RuntimeDependency,
-    service: ModelServiceDependency,
     image: ImageUpload = None,
 ) -> RestoreResponse:
     """Validate one upload and restore it with the lifespan-owned service."""
     validated_upload = await validate_upload(image, runtime.settings)
+    service = require_model_service(runtime)
     if not runtime.model_health().ready:
         raise ModelServiceUnavailableError("model service is unavailable")
 
-    result = _validate_service_result(await service.restore(validated_upload), validated_upload)
+    gate = require_inference_gate(runtime)
+    service_result = await gate.run(lambda: service.restore(validated_upload))
+    result = _validate_service_result(service_result, validated_upload)
     return RestoreResponse(
         image=RestoredImageResponse(
             media_type=result.restored_media_type,

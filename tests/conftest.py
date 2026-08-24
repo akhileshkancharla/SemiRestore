@@ -5,8 +5,10 @@ Nothing in this module is imported by the production package.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterator
 from io import BytesIO
+from threading import Event
 from typing import cast
 
 import pytest
@@ -39,6 +41,8 @@ class FakeModelService:
         startup_error: Exception | None = None,
         shutdown_error: Exception | None = None,
         inference_error: Exception | None = None,
+        inference_delay_seconds: float | None = None,
+        restore_release_event: Event | None = None,
         restoration_result: object = _DEFAULT_RESULT,
     ) -> None:
         self.current_health = health or ModelHealth(
@@ -51,10 +55,16 @@ class FakeModelService:
         self.startup_error = startup_error
         self.shutdown_error = shutdown_error
         self.inference_error = inference_error
+        self.inference_delay_seconds = inference_delay_seconds
+        self.restore_release_event = restore_release_event
         self.restoration_result = restoration_result
         self.startup_calls = 0
         self.shutdown_calls = 0
         self.restoration_calls = 0
+        self.active_restorations = 0
+        self.maximum_active_restorations = 0
+        self.restoration_started_event = Event()
+        self.restoration_cancelled_event = Event()
         self.restoration_inputs: list[dict[str, str | int]] = []
         self.synthetic_output_bytes = _synthetic_png()
 
@@ -73,6 +83,12 @@ class FakeModelService:
 
     async def restore(self, upload: ValidatedUpload) -> RestorationResult:
         self.restoration_calls += 1
+        self.active_restorations += 1
+        self.maximum_active_restorations = max(
+            self.maximum_active_restorations,
+            self.active_restorations,
+        )
+        self.restoration_started_event.set()
         self.restoration_inputs.append(
             {
                 "encoded_size": len(upload.encoded_bytes),
@@ -82,26 +98,36 @@ class FakeModelService:
                 "height": upload.height,
             }
         )
-        if not self.current_health.ready:
-            raise ModelServiceUnavailableError("synthetic test service is unready")
-        if self.inference_error is not None:
-            raise self.inference_error
-        if self.restoration_result is not _DEFAULT_RESULT:
-            return cast(RestorationResult, self.restoration_result)
-        return RestorationResult(
-            restored_image_bytes=self.synthetic_output_bytes,
-            restored_media_type="image/png",
-            restored_width=2,
-            restored_height=2,
-            original_width=upload.width,
-            original_height=upload.height,
-            inference_latency_ms=12.5,
-            device="test-device",
-            model_version="synthetic-test-model",
-            checkpoint_checksum=f"sha256:{'a' * 64}",
-            diagnostics={"synthetic": True, "source_format": upload.detected_format},
-            warnings=("Synthetic test output; no real restoration was performed.",),
-        )
+        try:
+            if self.restore_release_event is not None:
+                await asyncio.to_thread(self.restore_release_event.wait)
+            if self.inference_delay_seconds is not None:
+                await asyncio.sleep(self.inference_delay_seconds)
+            if not self.current_health.ready:
+                raise ModelServiceUnavailableError("synthetic test service is unready")
+            if self.inference_error is not None:
+                raise self.inference_error
+            if self.restoration_result is not _DEFAULT_RESULT:
+                return cast(RestorationResult, self.restoration_result)
+            return RestorationResult(
+                restored_image_bytes=self.synthetic_output_bytes,
+                restored_media_type="image/png",
+                restored_width=2,
+                restored_height=2,
+                original_width=upload.width,
+                original_height=upload.height,
+                inference_latency_ms=12.5,
+                device="test-device",
+                model_version="synthetic-test-model",
+                checkpoint_checksum=f"sha256:{'a' * 64}",
+                diagnostics={"synthetic": True, "source_format": upload.detected_format},
+                warnings=("Synthetic test output; no real restoration was performed.",),
+            )
+        except asyncio.CancelledError:
+            self.restoration_cancelled_event.set()
+            raise
+        finally:
+            self.active_restorations -= 1
 
 
 @pytest.fixture

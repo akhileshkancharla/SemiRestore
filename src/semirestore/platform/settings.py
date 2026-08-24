@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Literal
 
@@ -71,3 +72,14 @@ class RuntimeSettings(BaseSettings):
         if len(set(normalized)) != len(normalized):
             raise ValueError("must not contain duplicate media types")
         return normalized
+
+    @field_validator(
+        "concurrency_acquisition_timeout_seconds",
+        "inference_timeout_seconds",
+    )
+    @classmethod
+    def validate_finite_timeouts(cls, value: float) -> float:
+        """Reject infinite timeout values in addition to non-positive values."""
+        if not math.isfinite(value):
+            raise ValueError("timeout must be finite")
+        return value

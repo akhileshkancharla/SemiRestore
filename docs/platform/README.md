@@ -46,3 +46,21 @@ keeps the restored image and its metadata together by encoding the image bytes
 as Base64 in JSON. Base64 increases the encoded payload size by approximately
 one-third; a binary response may be added later if large-image workloads make
 that overhead material. Uploaded and restored images are not persisted.
+
+## Inference capacity and timeouts
+
+Each application lifespan owns one bounded inference controller configured by
+`SEMIRESTORE_INFERENCE_CONCURRENCY_LIMIT`,
+`SEMIRESTORE_CONCURRENCY_ACQUISITION_TIMEOUT_SECONDS`, and
+`SEMIRESTORE_INFERENCE_TIMEOUT_SECONDS`. Upload size, decoding, and dimension
+validation finish before a request waits for inference capacity, so invalid
+uploads cannot occupy an expensive model slot. A request that cannot acquire a
+slot in time receives HTTP 503 `inference_busy`; inference that exceeds its
+execution timeout receives HTTP 504 `inference_timeout`. Slots are released on
+success, failure, timeout, and cancellation.
+
+Async cancellation stops a cooperative restoration coroutine. If a future
+adapter offloads blocking CPU or GPU work to a thread or native runtime,
+cancelling the awaiting coroutine may not physically stop that work or GPU
+kernels immediately. Capacity-release behavior must be reviewed with the real
+adapter before claiming hard inference cancellation.
