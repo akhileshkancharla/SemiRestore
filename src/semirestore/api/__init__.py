@@ -1,4 +1,5 @@
-"""HTTP API components owned by the SemiRestore platform track.
+"""HTTP API components owned by the SemiRestore platform track."""
 
-The application factory is intentionally deferred to Platform Milestone 3.
-"""
+from semirestore.api.application import ApplicationRuntime, ModelServiceFactory, create_app
+
+__all__ = ["ApplicationRuntime", "ModelServiceFactory", "create_app"]
