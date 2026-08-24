@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 
 from semirestore.api.application import ApplicationRuntime
 from semirestore.api.dependencies import (
@@ -16,6 +16,7 @@ from semirestore.api.dependencies import (
 from semirestore.api.errors import RestorationFailedError
 from semirestore.api.observability import observe_inference, observe_restoration
 from semirestore.api.schemas import (
+    ErrorResponse,
     InferenceResponse,
     ModelIdentityResponse,
     RestoredImageResponse,
@@ -26,6 +27,16 @@ from semirestore.api.uploads import ValidatedUpload, validate_upload
 from semirestore.platform import ModelServiceUnavailableError, RestorationResult
 
 router = APIRouter(prefix="/api/v1", tags=["restoration"])
+
+RESTORATION_ERROR_RESPONSES = {
+    status.HTTP_400_BAD_REQUEST: {"model": ErrorResponse},
+    status.HTTP_413_CONTENT_TOO_LARGE: {"model": ErrorResponse},
+    status.HTTP_415_UNSUPPORTED_MEDIA_TYPE: {"model": ErrorResponse},
+    status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": ErrorResponse},
+    status.HTTP_500_INTERNAL_SERVER_ERROR: {"model": ErrorResponse},
+    status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse},
+    status.HTTP_504_GATEWAY_TIMEOUT: {"model": ErrorResponse},
+}
 
 RuntimeDependency = Annotated[ApplicationRuntime, Depends(get_runtime)]
 ImageUpload = Annotated[
@@ -63,7 +74,11 @@ def _validate_service_result(
         raise RestorationFailedError() from error
 
 
-@router.post("/restore", response_model=RestoreResponse)
+@router.post(
+    "/restore",
+    response_model=RestoreResponse,
+    responses=RESTORATION_ERROR_RESPONSES,
+)
 async def restore(
     request: Request,
     runtime: RuntimeDependency,
