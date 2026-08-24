@@ -39,6 +39,7 @@ the final handoff requirements without repeating their details.
 25. [Teammate integration checklist](integration-checklist.md)
 26. [Dashboard and local Compose stack](local-stack.md#dashboard-development)
 27. [Continuous integration](ci.md)
+28. [Load and resilience testing](load-testing.md)
 
 ## Ownership boundary
 
