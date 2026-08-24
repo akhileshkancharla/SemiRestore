@@ -31,6 +31,7 @@ the final handoff requirements without repeating their details.
 18. [CPU deployment](deployment.md#cpu-deployment)
 19. [GPU limitations](deployment.md#gpu-limitations)
 20. [Docker usage](deployment.md#docker-usage)
+    - [Local Compose stack](local-stack.md)
 21. [Docker health checking](deployment.md#container-health-check)
 22. [Runtime checkpoint mounting](deployment.md#runtime-model-artifacts)
 23. [Privacy and non-persistence](architecture.md#privacy-boundary)

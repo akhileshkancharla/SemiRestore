@@ -1,0 +1,96 @@
+name: semirestore
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: semirestore:platform
+    init: true
+    stop_grace_period: 35s
+    restart: unless-stopped
+    environment:
+      SEMIRESTORE_ENVIRONMENT: ${SEMIRESTORE_ENVIRONMENT:-development}
+      SEMIRESTORE_LOG_LEVEL: ${SEMIRESTORE_LOG_LEVEL:-INFO}
+      SEMIRESTORE_JSON_LOGGING: ${SEMIRESTORE_JSON_LOGGING:-true}
+      SEMIRESTORE_DEVICE_PREFERENCE: ${SEMIRESTORE_DEVICE_PREFERENCE:-cpu}
+      SEMIRESTORE_MODEL_CONFIG_PATH: ${SEMIRESTORE_MODEL_CONFIG_PATH:-/opt/semirestore/model/resolved_conditioned.yaml}
+      SEMIRESTORE_MODEL_METADATA_PATH: ${SEMIRESTORE_MODEL_METADATA_PATH:-/opt/semirestore/model/checksums.json}
+      SEMIRESTORE_CHECKPOINT_PATH: ${SEMIRESTORE_CHECKPOINT_PATH:-/models/semirestore_conditioned.pt}
+      SEMIRESTORE_INFERENCE_CONCURRENCY_LIMIT: ${SEMIRESTORE_INFERENCE_CONCURRENCY_LIMIT:-1}
+      SEMIRESTORE_CONCURRENCY_ACQUISITION_TIMEOUT_SECONDS: ${SEMIRESTORE_CONCURRENCY_ACQUISITION_TIMEOUT_SECONDS:-1.0}
+      SEMIRESTORE_INFERENCE_TIMEOUT_SECONDS: ${SEMIRESTORE_INFERENCE_TIMEOUT_SECONDS:-120.0}
+      SEMIRESTORE_ENABLE_FAKE_MODEL_SERVICE: "false"
+    volumes:
+      - type: bind
+        source: ${SEMIRESTORE_CHECKPOINT_HOST_PATH:-./artifacts/model/semirestore_conditioned.pt}
+        target: /models/semirestore_conditioned.pt
+        read_only: true
+    ports:
+      - "${SEMIRESTORE_API_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; response = urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2); raise SystemExit(0 if response.status == 200 else 1)
+      interval: 15s
+      timeout: 3s
+      start_period: 30s
+      retries: 4
+    cpus: "${SEMIRESTORE_API_CPUS:-2.0}"
+    mem_limit: ${SEMIRESTORE_API_MEMORY:-4g}
+    networks:
+      - backend
+      - frontend
+
+  dashboard:
+    image: nginx:1.27-alpine
+    profiles: [dashboard]
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      SEMIRESTORE_API_URL: ${SEMIRESTORE_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "${SEMIRESTORE_DASHBOARD_PORT:-5173}:80"
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=16m
+      - /var/run:size=1m
+    cpus: "${SEMIRESTORE_DASHBOARD_CPUS:-0.5}"
+    mem_limit: ${SEMIRESTORE_DASHBOARD_MEMORY:-128m}
+    networks:
+      - frontend
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    profiles: [observability]
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=${SEMIRESTORE_PROMETHEUS_RETENTION:-24h}
+    volumes:
+      - type: bind
+        source: ./deploy/prometheus/prometheus.yml
+        target: /etc/prometheus/prometheus.yml
+        read_only: true
+      - prometheus-data:/prometheus
+    ports:
+      - "${SEMIRESTORE_PROMETHEUS_PORT:-9090}:9090"
+    cpus: "${SEMIRESTORE_PROMETHEUS_CPUS:-0.5}"
+    mem_limit: ${SEMIRESTORE_PROMETHEUS_MEMORY:-256m}
+    networks:
+      - backend
+
+networks:
+  backend:
+    internal: true
+  frontend:
+
+volumes:
+  prometheus-data:
