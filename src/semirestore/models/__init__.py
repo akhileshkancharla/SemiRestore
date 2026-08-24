@@ -1,4 +1,5 @@
-"""Neural-network components used by SemiRestore.
+"""Neural-network components used by SemiRestore."""
 
-Model implementations are added in provenance-tracked migration milestones.
-"""
+from .naf_blocks import LayerNorm2d, NAFBlock, SimpleGate
+
+__all__ = ["LayerNorm2d", "NAFBlock", "SimpleGate"]
