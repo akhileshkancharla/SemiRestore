@@ -135,3 +135,69 @@ devices, checkpoint details, and other user-controlled values are never metric
 labels. A readiness gauge is intentionally deferred: current health is obtained
 on demand and no lifecycle hook can guarantee a continuously accurate gauge
 without risking stale or misleading readiness data.
+
+## Secure CPU container packaging
+
+The root `Dockerfile` defines a production-oriented, two-stage image based on
+the explicit `python:3.13-slim-bookworm` base. The builder copies package
+metadata before source and produces a wheel. The runtime stage installs a
+CPU-only PyTorch wheel, installs the SemiRestore wheel with its `platform`
+dependency group, and contains no compiler toolchain, source checkout,
+checkpoint, upload, output, or private dataset. Docker was not installed on the
+workstation used for this milestone, so the policy was validated statically;
+the image was not built or executed here.
+
+The intended commands, on a machine with Docker installed, are:
+
+```sh
+docker build --tag semirestore-platform:local .
+docker run --rm --publish 8000:8000 semirestore-platform:local
+```
+
+The container binds port 8000 and starts `semirestore.api:create_app` in Uvicorn
+factory mode with exactly one worker. Multiple workers would each initialize an
+independent model service and checkpoint, multiplying memory consumption.
+Horizontal replicas or additional workers therefore require deliberate host
+memory, GPU memory, checkpoint, and inference-concurrency planning.
+
+Non-secret runtime configuration uses the existing `SEMIRESTORE_` environment
+variables, including `SEMIRESTORE_ENVIRONMENT`, `SEMIRESTORE_LOG_LEVEL`, upload
+limits, inference capacity and timeouts, `SEMIRESTORE_MODEL_CONFIG_PATH`, and
+`SEMIRESTORE_CHECKPOINT_PATH`. Do not pass secrets through image `ARG` or `ENV`
+instructions. Configuration files and the future verified checkpoint should be
+provided deliberately through deployment-managed artifacts or read-only mounts:
+
+```sh
+docker run --rm --publish 8000:8000 \
+  --mount type=bind,src=/absolute/host/model.pt,dst=/models/model.pt,readonly \
+  --env SEMIRESTORE_CHECKPOINT_PATH=/models/model.pt \
+  semirestore-platform:local
+```
+
+The image never copies or downloads a checkpoint. Supplying a path does not
+invent or activate a real adapter: until the model branch supplies and wires a
+verified adapter, the application starts live while readiness remains false.
+Missing or unavailable checkpoints likewise make `/health/ready` fail without
+making the process dead. The OCI health check therefore calls only
+`/health/live` through Python's standard library; it never triggers readiness or
+inference.
+
+The runtime uses the dedicated numeric identity UID/GID `10001:10001`, does not
+need source-tree write access, and keeps fake-service behavior disabled. Where
+the container runtime supports them, operators can additionally apply a
+read-only root filesystem, a small writable `tmpfs` at `/tmp`, all-capability
+drop, and `no-new-privileges`, for example:
+
+```sh
+docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+  --cap-drop ALL --security-opt no-new-privileges \
+  --publish 8000:8000 semirestore-platform:local
+```
+
+These flags are runtime guidance and are not automatically applied by the
+Dockerfile. CPU execution is the portable default. GPU packaging was neither
+implemented nor tested: a real GPU deployment requires an NVIDIA-compatible
+container runtime, a CUDA-compatible PyTorch image strategy, and verified
+compatibility among CUDA libraries, the model implementation, and checkpoint.
+It must not be improvised by merely exposing a device, and single-worker model
+ownership remains important on GPU.

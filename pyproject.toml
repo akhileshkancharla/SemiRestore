@@ -22,6 +22,7 @@ platform = [
   "pydantic>=2.10,<3",
   "pydantic-settings>=2.7,<3",
   "python-multipart>=0.0.18,<1",
+  "uvicorn>=0.50,<1",
 ]
 evaluation = [
   "scikit-image>=0.25,<1",
