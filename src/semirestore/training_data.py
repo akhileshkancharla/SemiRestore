@@ -6,7 +6,7 @@ import csv
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 import torch
@@ -40,13 +40,22 @@ class PairRecord:
 
 
 def _safe_path(root: Path, text: str, *, role: str, sample_id: str) -> Path:
-    if not text.strip():
+    value = text.strip()
+    if not value:
         raise DatasetValidationError(f"Empty {role} path for sample {sample_id!r}")
-    relative = Path(text.strip())
-    if relative.is_absolute():
+
+    windows_path = PureWindowsPath(value)
+    portable_path = PurePosixPath(value.replace("\\", "/"))
+    if windows_path.drive or windows_path.root or portable_path.is_absolute():
         raise DatasetValidationError(
             f"Manifest {role} path for sample {sample_id!r} must be relative"
         )
+    if ".." in portable_path.parts:
+        raise DatasetValidationError(
+            f"Manifest {role} path for sample {sample_id!r} escapes the dataset root"
+        )
+
+    relative = Path(*portable_path.parts)
     resolved = (root / relative).resolve()
     if not resolved.is_relative_to(root):
         raise DatasetValidationError(
