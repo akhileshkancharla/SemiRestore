@@ -28,6 +28,7 @@ REAL_SHA256 = "273abd9d6dcfa9bdee71ac15016994962304b6c9d902898b4f4d503bed158c28"
 
 class ControlledUpscaleModel(nn.Module):
     scale = 2
+    padder_size = 8
 
     def __init__(self) -> None:
         super().__init__()
@@ -37,6 +38,7 @@ class ControlledUpscaleModel(nn.Module):
         self.last_device: torch.device | None = None
         self.grad_enabled: bool | None = None
         self.inference_mode_enabled: bool | None = None
+        self.last_input_shape: tuple[int, ...] | None = None
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         self.calls += 1
@@ -44,6 +46,7 @@ class ControlledUpscaleModel(nn.Module):
         self.last_device = inputs.device
         self.grad_enabled = torch.is_grad_enabled()
         self.inference_mode_enabled = torch.is_inference_mode_enabled()
+        self.last_input_shape = tuple(inputs.shape)
         return F.interpolate(inputs, scale_factor=2, mode="nearest")
 
 
@@ -108,6 +111,11 @@ def test_successful_cpu_restoration_has_exact_two_x_dimensions() -> None:
     assert result.restored_image.dtype == np.float32
     assert result.restored_image.flags.c_contiguous
     assert result.scale_factor == 2
+    assert result.spatial_plan.alignment == 8
+    assert result.spatial_plan.padded_width == 8
+    assert result.spatial_plan.padded_height == 8
+    assert result.spatial_plan.final_restored_width == 6
+    assert result.spatial_plan.final_restored_height == 4
     assert loader.model.calls == 1
 
 
@@ -369,6 +377,7 @@ def test_result_contains_complete_serialization_friendly_metadata() -> None:
     assert metadata["model_version"] == "synthetic-v1"
     assert metadata["training_revision"] == "synthetic-revision"
     assert metadata["checkpoint_sha256"] == "b" * 64
+    assert metadata["spatial_plan"] == result.spatial_plan.to_dict()
     assert isinstance(metadata["preprocessing"], dict)
     assert isinstance(metadata["postprocessing"], dict)
     json.dumps(metadata, allow_nan=False)
@@ -399,6 +408,81 @@ def test_direct_inference_pixel_limit_rejects_before_model_execution() -> None:
 
     assert "tiled inference" in str(error.value)
     assert loader.model.calls == 0
+
+
+def test_direct_inference_limit_uses_aligned_compute_pixels() -> None:
+    service, _manager, loader = _ready_service(max_pixels=300)
+    image = np.zeros((15, 17), dtype=np.uint8)
+
+    with pytest.raises(restoration_service.RestorationResourceLimitError) as error:
+        service.restore(image)
+
+    assert image.size == 255
+    assert "384 compute pixels" in str(error.value)
+    assert loader.model.calls == 0
+
+
+def test_input_near_limit_passes_when_aligned_compute_fits() -> None:
+    service, _manager, loader = _ready_service(max_pixels=256)
+
+    result = service.restore(np.zeros((15, 16), dtype=np.uint8))
+
+    assert result.spatial_plan.unpadded_input_pixels == 240
+    assert result.spatial_plan.padded_input_pixels == 256
+    assert loader.model.calls == 1
+
+
+@pytest.mark.parametrize(
+    "shape",
+    [
+        (8, 16),
+        (9, 11),
+        (7, 13),
+        (5, 8),
+        (8, 5),
+        (3, 4),
+        (9, 1),
+        (1, 9),
+        (7, 7),
+        (9, 9),
+    ],
+)
+def test_varied_dimensions_preserve_exact_output_without_external_padding(
+    shape: tuple[int, int],
+) -> None:
+    model = ControlledUpscaleModel()
+    service, _manager, _loader = _ready_service(model=model)
+    image = np.arange(shape[0] * shape[1], dtype=np.uint16).reshape(shape)
+    original = image.copy()
+
+    result = service.restore(image)
+
+    assert model.last_input_shape == (1, 1, shape[0], shape[1])
+    assert result.restored_image.shape == (shape[0] * 2, shape[1] * 2)
+    assert result.spatial_plan.final_restored_height == shape[0] * 2
+    assert result.spatial_plan.final_restored_width == shape[1] * 2
+    np.testing.assert_array_equal(image, original)
+
+
+def test_significant_padding_overhead_is_reported() -> None:
+    service, _manager, _loader = _ready_service()
+
+    result = service.restore(np.zeros((7, 7), dtype=np.uint8))
+
+    assert result.spatial_plan.padding_overhead_fraction == pytest.approx(15 / 49)
+    assert any("Internal alignment padding" in warning for warning in result.warnings)
+
+
+def test_aligned_input_has_no_padding_warning_or_output_change() -> None:
+    service, _manager, _loader = _ready_service()
+    image = np.arange(64, dtype=np.uint8).reshape(8, 8)
+
+    result = service.restore(image)
+
+    expected = np.repeat(np.repeat(image.astype(np.float32) / 255.0, 2, axis=0), 2, axis=1)
+    np.testing.assert_array_equal(result.restored_image, expected)
+    assert result.spatial_plan.internal_padding_required is False
+    assert all("alignment padding" not in warning for warning in result.warnings)
 
 
 def test_concurrent_calls_serialize_model_execution() -> None:
@@ -494,26 +578,34 @@ def test_real_checkpoint_restores_small_synthetic_image() -> None:
     manager = model_manager.ModelManager(device="cpu")
     manager.load()
     service = restoration_service.SingleImageRestorationService(manager)
-    image = np.linspace(0.0, 1.0, 8 * 8, dtype=np.float32).reshape(8, 8)
+    varied_shapes = ((8, 8), (5, 7), (3, 9))
 
-    result = service.restore(image)
+    for height, width in varied_shapes:
+        image = np.linspace(0.0, 1.0, height * width, dtype=np.float32).reshape(
+            height,
+            width,
+        )
+        result = service.restore(image)
 
-    assert result.original_width == 8
-    assert result.original_height == 8
-    assert result.restored_width == 16
-    assert result.restored_height == 16
-    assert result.restored_image.shape == (16, 16)
-    assert result.restored_image.dtype == np.float32
-    assert np.isfinite(result.restored_image).all()
-    assert float(result.restored_image.min()) >= 0.0
-    assert float(result.restored_image.max()) <= 1.0
-    assert result.media_type == "image/png"
-    assert result.png_bit_depth == 16
-    assert result.checkpoint_sha256 == REAL_SHA256
-    assert result.model_name == "naf_sr"
-    assert result.model_version == "conditioned-d037473"
-    with Image.open(io.BytesIO(result.png_bytes)) as decoded:
-        assert decoded.mode == "I;16"
-        assert decoded.size == (16, 16)
+        assert result.original_width == width
+        assert result.original_height == height
+        assert result.restored_width == width * 2
+        assert result.restored_height == height * 2
+        assert result.restored_image.shape == (height * 2, width * 2)
+        assert result.restored_image.dtype == np.float32
+        assert np.isfinite(result.restored_image).all()
+        assert float(result.restored_image.min()) >= 0.0
+        assert float(result.restored_image.max()) <= 1.0
+        assert result.spatial_plan.alignment == 8
+        assert result.spatial_plan.padded_width % 8 == 0
+        assert result.spatial_plan.padded_height % 8 == 0
+        assert result.media_type == "image/png"
+        assert result.png_bit_depth == 16
+        assert result.checkpoint_sha256 == REAL_SHA256
+        assert result.model_name == "naf_sr"
+        assert result.model_version == "conditioned-d037473"
+        with Image.open(io.BytesIO(result.png_bytes)) as decoded:
+            assert decoded.mode == "I;16"
+            assert decoded.size == (width * 2, height * 2)
 
     manager.close()

@@ -49,10 +49,11 @@ accuracy, or quality score is fabricated.
 
 ## Direct-inference resource limit
 
-The default direct input limit is 262,144 pixels (for example, 512x512). This
-conservative guard is lower than preprocessing's decode limit and exists to
-avoid sending an unexpectedly large full-resolution activation graph through
-the model before tiled inference exists. It is not a universal CPU/GPU safety
+The default direct input limit is 262,144 internally aligned/padded pixels (for
+example, an already aligned 512x512 image). As formalized in Milestone 14, this
+uses the model's actual `padder_size` rather than raw image area because padded
+area better represents encoder/decoder work. This conservative guard remains
+lower than preprocessing's decode limit and is not a universal CPU/GPU safety
 claim. Controlled deployments may deliberately override it, but it cannot
 exceed the configured preprocessing pixel limit. Rejections explicitly advise
 using tiled inference; tiling itself is not implemented here.

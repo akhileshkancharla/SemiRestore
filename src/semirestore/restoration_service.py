@@ -37,9 +37,11 @@ from .preprocessing import (
     UnsupportedInputError,
     preprocess_sem_image,
 )
+from .spatial import SpatialPlan, SpatialPlanningError, create_spatial_plan
 
 DEFAULT_DIRECT_INFERENCE_MAX_PIXELS = 512 * 512
 PNG_MEDIA_TYPE = "image/png"
+SIGNIFICANT_PADDING_OVERHEAD_FRACTION = 0.25
 SUPPORTED_OUTPUT_BIT_DEPTHS = frozenset({8, 16})
 
 
@@ -55,6 +57,7 @@ class RestorationErrorCategory(StrEnum):
     MODEL_INFERENCE = "model_inference_failure"
     INVALID_MODEL_OUTPUT = "invalid_model_output"
     POSTPROCESSING = "postprocessing_failure"
+    SPATIAL_PLAN = "spatial_plan_failure"
 
 
 class RestorationServiceError(RuntimeError):
@@ -136,6 +139,14 @@ class RestorationPostprocessingError(RestorationServiceError):
         )
 
 
+class RestorationSpatialPlanError(RestorationServiceError):
+    def __init__(self) -> None:
+        super().__init__(
+            RestorationErrorCategory.SPATIAL_PLAN,
+            "The loaded model has an invalid spatial contract",
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class SingleImageRestorationResult:
     """Restored scientific image, lossless payload, provenance, and timings."""
@@ -149,6 +160,7 @@ class SingleImageRestorationResult:
     restored_width: int
     restored_height: int
     scale_factor: int
+    spatial_plan: SpatialPlan
     preprocessing_metadata: dict[str, object]
     postprocessing_metadata: dict[str, object]
     preprocessing_latency_ms: float
@@ -176,6 +188,7 @@ class SingleImageRestorationResult:
             "restored_width": self.restored_width,
             "restored_height": self.restored_height,
             "scale_factor": self.scale_factor,
+            "spatial_plan": self.spatial_plan.to_dict(),
             "preprocessing": dict(self.preprocessing_metadata),
             "postprocessing": dict(self.postprocessing_metadata),
             "latency_ms": {
@@ -207,6 +220,16 @@ def _elapsed_ms(started: float, finished: float) -> float:
 def _synchronize_cuda(device: torch.device) -> None:
     if device.type == "cuda":
         torch.cuda.synchronize(device)
+
+
+def _spatial_warnings(plan: SpatialPlan) -> tuple[str, ...]:
+    if plan.padding_overhead_fraction < SIGNIFICANT_PADDING_OVERHEAD_FRACTION:
+        return ()
+    percentage = plan.padding_overhead_fraction * 100.0
+    return (
+        f"Internal alignment padding adds {plan.padding_overhead_pixels} compute pixels "
+        f"({percentage:.1f}% over the unpadded input).",
+    )
 
 
 class SingleImageRestorationService:
@@ -288,11 +311,20 @@ class SingleImageRestorationService:
             raise RestorationPreprocessingError() from None
         preprocessing_finished = self._clock()
 
-        input_pixels = preprocessed.original_width * preprocessed.original_height
-        if input_pixels > self._max_direct_input_pixels:
+        try:
+            spatial_plan = create_spatial_plan(
+                original_width=preprocessed.original_width,
+                original_height=preprocessed.original_height,
+                alignment=getattr(model, "padder_size", None),
+                scale_factor=status.scale_factor,
+            )
+        except SpatialPlanningError:
+            raise RestorationSpatialPlanError() from None
+        if spatial_plan.padded_input_pixels > self._max_direct_input_pixels:
             raise RestorationResourceLimitError(
-                f"Input has {input_pixels} pixels, exceeding the direct-inference limit of "
-                f"{self._max_direct_input_pixels}; use tiled inference for larger images"
+                f"Aligned input requires {spatial_plan.padded_input_pixels} compute pixels, "
+                f"exceeding the direct-inference limit of {self._max_direct_input_pixels}; "
+                "use tiled inference for larger images"
             )
 
         try:
@@ -331,6 +363,11 @@ class SingleImageRestorationService:
             raise RestorationPostprocessingError() from None
         except Exception:
             raise RestorationPostprocessingError() from None
+        if (
+            postprocessed.restored_width != spatial_plan.final_restored_width
+            or postprocessed.restored_height != spatial_plan.final_restored_height
+        ):
+            raise InvalidModelOutputError()
         try:
             png_bytes = postprocessed.encode(encoding="png", bit_depth=output_bit_depth)
         except PostprocessingError:
@@ -350,6 +387,7 @@ class SingleImageRestorationService:
             restored_width=postprocessed.restored_width,
             restored_height=postprocessed.restored_height,
             scale_factor=postprocessed.scale_factor,
+            spatial_plan=spatial_plan,
             preprocessing_metadata=preprocessed.metadata(),
             postprocessing_metadata=postprocessed.metadata(),
             preprocessing_latency_ms=_elapsed_ms(
@@ -369,7 +407,11 @@ class SingleImageRestorationService:
             model_version=status.model_version,
             training_revision=status.training_revision,
             checkpoint_sha256=status.checkpoint_sha256,
-            warnings=preprocessed.warnings + postprocessed.warnings,
+            warnings=(
+                preprocessed.warnings
+                + _spatial_warnings(spatial_plan)
+                + postprocessed.warnings
+            ),
         )
 
 
@@ -386,6 +428,8 @@ __all__ = [
     "RestorationPreprocessingError",
     "RestorationResourceLimitError",
     "RestorationServiceError",
+    "RestorationSpatialPlanError",
+    "SIGNIFICANT_PADDING_OVERHEAD_FRACTION",
     "SingleImageRestorationResult",
     "SingleImageRestorationService",
     "UnsupportedRestorationOutputError",
