@@ -8,6 +8,7 @@ from semirestore.platform.model_service import (
     ModelServiceInitializationError,
     ModelServiceState,
     ModelServiceUnavailableError,
+    RestorationResult,
 )
 from semirestore.platform.settings import RuntimeSettings
 
@@ -19,5 +20,6 @@ __all__ = [
     "ModelServiceInitializationError",
     "ModelServiceState",
     "ModelServiceUnavailableError",
+    "RestorationResult",
     "RuntimeSettings",
 ]

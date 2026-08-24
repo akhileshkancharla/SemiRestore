@@ -20,6 +20,7 @@ platform = [
   "fastapi>=0.115,<1",
   "pydantic>=2.10,<3",
   "pydantic-settings>=2.7,<3",
+  "python-multipart>=0.0.18,<1",
 ]
 evaluation = [
   "scikit-image>=0.25,<1",

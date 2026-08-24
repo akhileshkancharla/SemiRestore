@@ -93,6 +93,8 @@ def create_app(
     app.state.runtime = runtime
     register_exception_handlers(app)
     from semirestore.api.routes.operations import router as operations_router
+    from semirestore.api.routes.restoration import router as restoration_router
 
     app.include_router(operations_router)
+    app.include_router(restoration_router)
     return app

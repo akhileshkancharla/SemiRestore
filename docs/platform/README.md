@@ -38,3 +38,11 @@ py -3.13 -m venv .venv
 
 Docker is not required for this milestone. Container packaging is deferred to
 Platform Milestone 11.
+
+## Restoration response transport
+
+`POST /api/v1/restore` accepts one multipart field named `image`. The response
+keeps the restored image and its metadata together by encoding the image bytes
+as Base64 in JSON. Base64 increases the encoded payload size by approximately
+one-third; a binary response may be added later if large-image workloads make
+that overhead material. Uploaded and restored images are not persisted.

@@ -2,9 +2,23 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+import math
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Protocol, runtime_checkable
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+from pydantic import JsonValue
+
+if TYPE_CHECKING:
+    from semirestore.api.uploads import ValidatedUpload
+
+_SUPPORTED_OUTPUT_MEDIA_TYPES = frozenset({"image/png", "image/jpeg", "image/tiff"})
+_MAX_DIAGNOSTICS_BYTES = 65_536
+_MAX_IDENTITY_LENGTH = 256
+_MAX_WARNING_LENGTH = 512
 
 
 class ModelServiceState(StrEnum):
@@ -36,13 +50,100 @@ class ModelHealth:
             raise ValueError("an unready model service must have an unavailable reason")
 
 
+def _validate_safe_text(value: str | None, field_name: str) -> None:
+    if value is None:
+        return
+    if (
+        not isinstance(value, str)
+        or not value
+        or value != value.strip()
+        or len(value) > _MAX_IDENTITY_LENGTH
+        or not value.isprintable()
+        or "/" in value
+        or "\\" in value
+    ):
+        raise ValueError(f"{field_name} must be a safe public identifier")
+
+
+@dataclass(frozen=True, slots=True)
+class RestorationResult:
+    """Serializable, model-independent result returned to the API platform."""
+
+    restored_image_bytes: bytes
+    restored_media_type: str
+    restored_width: int
+    restored_height: int
+    original_width: int
+    original_height: int
+    inference_latency_ms: float | None = None
+    device: str | None = None
+    model_version: str | None = None
+    checkpoint_checksum: str | None = None
+    diagnostics: Mapping[str, JsonValue] = field(default_factory=dict)
+    warnings: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.restored_image_bytes, bytes) or not self.restored_image_bytes:
+            raise ValueError("restored image bytes must be non-empty bytes")
+        if self.restored_media_type not in _SUPPORTED_OUTPUT_MEDIA_TYPES:
+            raise ValueError("restored media type is unsupported")
+        for field_name in (
+            "restored_width",
+            "restored_height",
+            "original_width",
+            "original_height",
+        ):
+            value = getattr(self, field_name)
+            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+                raise ValueError(f"{field_name} must be a positive integer")
+        if self.inference_latency_ms is not None:
+            latency = self.inference_latency_ms
+            if (
+                not isinstance(latency, (int, float))
+                or isinstance(latency, bool)
+                or not math.isfinite(latency)
+                or latency < 0
+            ):
+                raise ValueError("inference latency must be finite and non-negative")
+            object.__setattr__(self, "inference_latency_ms", float(latency))
+
+        _validate_safe_text(self.device, "device")
+        _validate_safe_text(self.model_version, "model version")
+        _validate_safe_text(self.checkpoint_checksum, "checkpoint checksum")
+
+        if not isinstance(self.diagnostics, Mapping):
+            raise ValueError("diagnostics must be a JSON-compatible mapping")
+        try:
+            serialized_diagnostics = json.dumps(
+                dict(self.diagnostics),
+                allow_nan=False,
+                separators=(",", ":"),
+            )
+            decoded_diagnostics = json.loads(serialized_diagnostics)
+        except (TypeError, ValueError) as error:
+            raise ValueError("diagnostics must contain only JSON-compatible values") from error
+        if len(serialized_diagnostics.encode("utf-8")) > _MAX_DIAGNOSTICS_BYTES:
+            raise ValueError("diagnostics exceed the platform result limit")
+        object.__setattr__(self, "diagnostics", MappingProxyType(decoded_diagnostics))
+
+        if not isinstance(self.warnings, tuple):
+            raise ValueError("warnings must be an immutable tuple")
+        for warning in self.warnings:
+            if (
+                not isinstance(warning, str)
+                or not warning
+                or warning != warning.strip()
+                or len(warning) > _MAX_WARNING_LENGTH
+                or not warning.isprintable()
+                or "/" in warning
+                or "\\" in warning
+            ):
+                raise ValueError("warnings must contain only safe public text")
+
+
 @runtime_checkable
 class ModelService(Protocol):
-    """Lifecycle and health surface required by the API platform.
-
-    Restoration is intentionally absent until its cross-track result contract
-    is available. Implementations own model and checkpoint behavior.
-    """
+    """Lifecycle, health, and restoration surface required by the API platform."""
 
     async def startup(self) -> None:
         """Initialize long-lived model resources once."""
@@ -52,6 +153,9 @@ class ModelService(Protocol):
 
     def health(self) -> ModelHealth:
         """Return current safe readiness and model metadata."""
+
+    async def restore(self, upload: ValidatedUpload) -> RestorationResult:
+        """Restore one transport-validated image using long-lived resources."""
 
 
 class ModelServiceError(RuntimeError):
