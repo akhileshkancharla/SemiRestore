@@ -1,0 +1,103 @@
+name: Integrated platform validation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - work/platform-likhitha
+
+permissions:
+  contents: read
+
+concurrency:
+  group: semirestore-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-platform:
+    name: Backend and platform
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install CPU runtime and development dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.6,<3"
+          python -m pip install -e ".[platform,dev]"
+
+      - name: Ruff
+        run: python -m ruff check .
+
+      - name: Complete pytest suite without a checkpoint
+        run: |
+          python -m pytest \
+            --basetemp "${RUNNER_TEMP}/pytest" \
+            -o "cache_dir=${RUNNER_TEMP}/pytest-cache"
+
+      - name: Focused platform policies
+        run: |
+          python -m pytest \
+            tests/platform/test_container_policy.py \
+            tests/platform/test_compose_policy.py \
+            tests/platform/test_dashboard_policy.py \
+            tests/platform/test_ci_policy.py \
+            --basetemp "${RUNNER_TEMP}/platform-pytest" \
+            -o "cache_dir=${RUNNER_TEMP}/platform-cache"
+
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+
+      - name: Guard immutable and generated artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          tracked_checkpoints="$(git ls-files '*.pt' '*.pth' '*.ckpt')"
+          tracked_local_artifacts="$(git ls-files 'local/artifacts/**')"
+          tracked_frontend_outputs="$(git ls-files 'web/dist/**' 'web/coverage/**' 'web/node_modules/**')"
+          test -z "${tracked_checkpoints}"
+          test -z "${tracked_local_artifacts}"
+          test -z "${tracked_frontend_outputs}"
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Frontend tests
+        run: npm test -- --run
+
+      - name: TypeScript and production bundle
+        run: npm run build
+
+      - name: Dependency audit
+        run: npm audit --audit-level=high

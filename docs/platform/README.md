@@ -38,6 +38,7 @@ the final handoff requirements without repeating their details.
 24. [Known limitations](deployment.md#known-limitations)
 25. [Teammate integration checklist](integration-checklist.md)
 26. [Dashboard and local Compose stack](local-stack.md#dashboard-development)
+27. [Continuous integration](ci.md)
 
 ## Ownership boundary
 
