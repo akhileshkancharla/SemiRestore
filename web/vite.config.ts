@@ -4,10 +4,19 @@ import { defineConfig, loadEnv } from "vite";
 export default defineConfig(({ mode }) => {
   const environment = loadEnv(mode, process.cwd(), "");
   const developmentApi = environment.SEMIRESTORE_DEV_API_URL ?? "http://127.0.0.1:8000";
+  const isPagesBuild = mode === "pages";
 
   return {
+    base: isPagesBuild ? "/SemiRestore/" : "/",
     plugins: [react()],
     build: {
+      ...(isPagesBuild
+        ? {
+            assetsDir: "assets/semirestore",
+            emptyOutDir: false,
+            outDir: "..",
+          }
+        : {}),
       sourcemap: false,
       target: "es2022",
     },
